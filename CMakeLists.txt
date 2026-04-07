@@ -74,7 +74,8 @@ if(QT_VERSION_MAJOR GREATER_EQUAL 6)
     qt_add_executable(P2PClient MANUAL_FINALIZATION ${PROJECT_SOURCES})
 else()
     add_executable(P2PClient ${PROJECT_SOURCES}
-        p2pclient.h p2pclient.cpp)
+        p2pclient.h p2pclient.cpp
+        filetransfermanager.h filetransfermanager.cpp)
 endif()
 
 target_link_libraries(P2PClient PRIVATE
