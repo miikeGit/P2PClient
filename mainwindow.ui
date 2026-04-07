@@ -19,19 +19,16 @@
      <widget class="QLineEdit" name="targetIdLineEdit"/>
     </item>
     <item>
-     <widget class="QLineEdit" name="messageLineEdit"/>
-    </item>
-    <item>
-     <widget class="QPushButton" name="sendButton">
+     <widget class="QPushButton" name="callButton">
       <property name="text">
-       <string>Send</string>
+       <string>call</string>
       </property>
      </widget>
     </item>
     <item>
-     <widget class="QPushButton" name="callButton">
+     <widget class="QPushButton" name="sendFileButton">
       <property name="text">
-       <string>PushButton</string>
+       <string>send</string>
       </property>
      </widget>
     </item>

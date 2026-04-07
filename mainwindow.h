@@ -7,6 +7,9 @@
 #include <rtc/rtc.hpp>
 #include <QJsonObject>
 #include <QJsonDocument>
+#include <QFile>
+#include <QFileInfo>
+#include <QFileDialog>
 
 QT_BEGIN_NAMESPACE
 namespace Ui { class MainWindow; }
@@ -21,11 +24,13 @@ public:
 
 private slots:
 	void on_callButton_clicked();
-	void on_sendButton_clicked();
 	void onMQTTConnected();
 	void onMQTTReceived(const QMQTT::Message& message);
+	void on_sendFileButton_clicked();
 
 private:
+	static constexpr qint64 CHUNK_SIZE = 16384;
+
 	std::unique_ptr<Ui::MainWindow> ui;
 	QMQTT::Client *m_mqttClient;
 
@@ -34,6 +39,10 @@ private:
 
 	std::shared_ptr<rtc::PeerConnection> m_peerConnection;
 	std::shared_ptr<rtc::DataChannel> m_dataChannel;
+
+	QFile m_incomingFile;
+	qint64 m_expectedFileSize = 0;
+	qint64 m_receivedBytes = 0;
 
 	void SetupMQTT();
 	void SetupWebRTC();

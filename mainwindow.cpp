@@ -3,6 +3,8 @@
 #include <QSslConfiguration>
 #include <QUuid>
 #include <QDebug>
+#include <QTimer>
+#include <QStandardPaths>
 
 using namespace rtc;
 
@@ -130,7 +132,29 @@ void MainWindow::wireDataChannel() {
 		if (std::holds_alternative<std::string>(message)) {
 			QString text = QString::fromStdString(std::get<std::string>(message));
 			QMetaObject::invokeMethod(this, [this, text]() {
-				qDebug() << "In (P2P): " + text;
+				QJsonDocument doc = QJsonDocument::fromJson(text.toUtf8());
+				if (!doc.isNull() && doc.isObject() && doc.object().contains("file_name")) {
+					QJsonObject obj = doc.object();
+					m_expectedFileSize = obj["file_size"].toVariant().toLongLong();
+					m_receivedBytes = 0;
+					m_incomingFile.setFileName(QStandardPaths::writableLocation(QStandardPaths::DownloadLocation) + "/" + obj["file_name"].toString());
+					if (!m_incomingFile.open(QIODevice::WriteOnly)) return;
+				}
+			});
+		}
+
+		else if (std::holds_alternative<binary>(message)) {
+			auto binChunk = std::get<binary>(message);
+			QByteArray chunk(reinterpret_cast<const char*>(binChunk.data()), binChunk.size());
+
+			QMetaObject::invokeMethod(this, [this, chunk]() {
+				if (m_incomingFile.isOpen()) {
+					m_incomingFile.write(chunk);
+					m_receivedBytes += chunk.size();
+					if (m_receivedBytes >= m_expectedFileSize) {
+						m_incomingFile.close();
+					}
+				}
 			});
 		}
 	});
@@ -150,10 +174,33 @@ void MainWindow::on_callButton_clicked() {
 	m_peerConnection->setLocalDescription();
 }
 
-void MainWindow::on_sendButton_clicked() {
-	if (m_dataChannel && m_dataChannel->isOpen()) {
-		m_dataChannel->send(ui->messageLineEdit->text().toStdString());
-		qDebug() << "P2P: " + ui->messageLineEdit->text();
-		ui->messageLineEdit->clear();
-	}
+void MainWindow::on_sendFileButton_clicked() {
+	QString filePath = QFileDialog::getOpenFileName(this);
+	if (filePath.isEmpty()) return;
+
+	auto file = std::make_shared<QFile>(filePath);
+	if (!file->open(QIODevice::ReadOnly)) return;
+
+	QFileInfo fileInfo(*file);
+	QJsonObject meta;
+	meta["file_name"] = fileInfo.fileName();
+	meta["file_size"] = fileInfo.size();
+	m_dataChannel->send(QJsonDocument(meta).toJson(QJsonDocument::Compact).toStdString());
+
+	auto timer = new QTimer(this);
+			connect(timer, &QTimer::timeout, this, [this, file, timer]() {
+					if (file->atEnd() || !m_dataChannel->isOpen()) {
+							file->close();
+							timer->deleteLater();
+							qDebug() << "File sent";
+							return;
+					}
+					QByteArray chunk = file->read(CHUNK_SIZE);
+					binary binChunk(
+							reinterpret_cast<const std::byte*>(chunk.constData()),
+							reinterpret_cast<const std::byte*>(chunk.constData()) + chunk.size()
+					);
+					m_dataChannel->send(std::move(binChunk));
+			});
+			timer->start(0);
 }
