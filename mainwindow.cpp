@@ -133,12 +133,24 @@ void MainWindow::wireDataChannel() {
 			QString text = QString::fromStdString(std::get<std::string>(message));
 			QMetaObject::invokeMethod(this, [this, text]() {
 				QJsonDocument doc = QJsonDocument::fromJson(text.toUtf8());
-				if (!doc.isNull() && doc.isObject() && doc.object().contains("file_name")) {
-					QJsonObject obj = doc.object();
+				QJsonObject obj = doc.object();
+
+				if (doc.isNull() || !doc.isObject()) return;
+
+				if (obj.contains("file_name")) {
 					m_expectedFileSize = obj["file_size"].toVariant().toLongLong();
 					m_receivedBytes = 0;
 					m_incomingFile.setFileName(QStandardPaths::writableLocation(QStandardPaths::DownloadLocation) + "/" + obj["file_name"].toString());
 					if (!m_incomingFile.open(QIODevice::WriteOnly)) return;
+				}
+
+				if (obj.contains("action") && obj["action"].toString() == "cancel_transfer") {
+					if (m_incomingFile.isOpen()) {
+						m_incomingFile.close();
+						m_incomingFile.remove();
+						ui->progressBar->setValue(0);
+					}
+				return;
 				}
 			});
 		}
@@ -196,14 +208,17 @@ void MainWindow::on_sendFileButton_clicked() {
 
 	ui->progressBar->setMaximum(fileInfo.size());
 	ui->progressBar->setValue(0);
+	m_isTransferring = true;
+	m_transferSpeedTimer.start();
 
-	auto timer = new QTimer(this);
-	connect(timer, &QTimer::timeout, this, [this, file, timer]() {
+	m_fileSenderTimer = new QTimer(this);
+	connect(m_fileSenderTimer, &QTimer::timeout, this, [this, file]() {
 		if (file->atEnd() || !m_dataChannel->isOpen()) {
 			file->close();
-			timer->deleteLater();
+			m_fileSenderTimer->deleteLater();
 			qDebug() << "File sent";
 			ui->progressBar->setValue(0);
+			m_isTransferring = false;
 			return;
 		}
 		QByteArray chunk = file->read(CHUNK_SIZE);
@@ -212,6 +227,33 @@ void MainWindow::on_sendFileButton_clicked() {
 			reinterpret_cast<const std::byte*>(chunk.constData()) + chunk.size());
 		m_dataChannel->send(std::move(binChunk));
 		ui->progressBar->setValue(file->pos());
+
+		qint64 elapsedMs = m_transferSpeedTimer.elapsed();
+		if (elapsedMs > 1000) {
+			qint64 bytesSent = file->pos();
+			double BytesPerSec = ((bytesSent - m_lastSpeedCheckBytes) * 1000.0) / elapsedMs;
+			double MBps = BytesPerSec / (1024.0 * 1024.0);
+			QString status = QString("Speed: %1 MB/s").arg(MBps, 0, 'f', 2);
+			ui->transferSpeed->setText(status);
+			ui->progressBar->setValue(bytesSent);
+			m_transferSpeedTimer.restart();
+			m_lastSpeedCheckBytes = bytesSent;
+		}
 	});
-	timer->start(0);
+	m_fileSenderTimer->start(0);
+}
+
+void MainWindow::on_cancelButton_clicked() {
+	if (!m_isTransferring) return;
+	if (m_fileSenderTimer) {
+		m_fileSenderTimer->stop();
+		m_fileSenderTimer->deleteLater();
+		m_fileSenderTimer = nullptr;
+	}
+	QJsonObject cancelMsg;
+	cancelMsg["action"] = "cancel_transfer";
+	m_dataChannel->send(QJsonDocument(cancelMsg).toJson(QJsonDocument::Compact).toStdString());
+
+	m_isTransferring = false;
+	ui->progressBar->setValue(0);
 }

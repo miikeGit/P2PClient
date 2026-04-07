@@ -10,6 +10,7 @@
 #include <QFile>
 #include <QFileInfo>
 #include <QFileDialog>
+#include <QElapsedTimer>
 
 QT_BEGIN_NAMESPACE
 namespace Ui { class MainWindow; }
@@ -27,6 +28,7 @@ private slots:
 	void onMQTTConnected();
 	void onMQTTReceived(const QMQTT::Message& message);
 	void on_sendFileButton_clicked();
+	void on_cancelButton_clicked();
 
 private:
 	static constexpr qint64 CHUNK_SIZE = 16384;
@@ -43,6 +45,11 @@ private:
 	QFile m_incomingFile;
 	qint64 m_expectedFileSize = 0;
 	qint64 m_receivedBytes = 0;
+	qint64 m_lastSpeedCheckBytes = 0;
+
+	QElapsedTimer m_transferSpeedTimer;
+	QTimer *m_fileSenderTimer = nullptr;
+	bool m_isTransferring = false;
 
 	void SetupMQTT();
 	void SetupWebRTC();
