@@ -151,8 +151,15 @@ void MainWindow::wireDataChannel() {
 				if (m_incomingFile.isOpen()) {
 					m_incomingFile.write(chunk);
 					m_receivedBytes += chunk.size();
+
+					if (ui->progressBar->maximum() != m_expectedFileSize) {
+						ui->progressBar->setMaximum(m_expectedFileSize);
+					}
+					ui->progressBar->setValue(m_receivedBytes);
+
 					if (m_receivedBytes >= m_expectedFileSize) {
 						m_incomingFile.close();
+						ui->progressBar->setValue(0);
 					}
 				}
 			});
@@ -187,20 +194,24 @@ void MainWindow::on_sendFileButton_clicked() {
 	meta["file_size"] = fileInfo.size();
 	m_dataChannel->send(QJsonDocument(meta).toJson(QJsonDocument::Compact).toStdString());
 
+	ui->progressBar->setMaximum(fileInfo.size());
+	ui->progressBar->setValue(0);
+
 	auto timer = new QTimer(this);
-			connect(timer, &QTimer::timeout, this, [this, file, timer]() {
-					if (file->atEnd() || !m_dataChannel->isOpen()) {
-							file->close();
-							timer->deleteLater();
-							qDebug() << "File sent";
-							return;
-					}
-					QByteArray chunk = file->read(CHUNK_SIZE);
-					binary binChunk(
-							reinterpret_cast<const std::byte*>(chunk.constData()),
-							reinterpret_cast<const std::byte*>(chunk.constData()) + chunk.size()
-					);
-					m_dataChannel->send(std::move(binChunk));
-			});
-			timer->start(0);
+	connect(timer, &QTimer::timeout, this, [this, file, timer]() {
+		if (file->atEnd() || !m_dataChannel->isOpen()) {
+			file->close();
+			timer->deleteLater();
+			qDebug() << "File sent";
+			ui->progressBar->setValue(0);
+			return;
+		}
+		QByteArray chunk = file->read(CHUNK_SIZE);
+		binary binChunk(
+			reinterpret_cast<const std::byte*>(chunk.constData()),
+			reinterpret_cast<const std::byte*>(chunk.constData()) + chunk.size());
+		m_dataChannel->send(std::move(binChunk));
+		ui->progressBar->setValue(file->pos());
+	});
+	timer->start(0);
 }
