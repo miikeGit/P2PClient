@@ -156,6 +156,7 @@ void P2PClient::wireDataChannel() {
 }
 
 void P2PClient::call(const QString &targetId) {
+	if (targetId == m_myId) return;
 	closeConnection();
 	m_targetId = targetId;
 	SetupWebRTC();
