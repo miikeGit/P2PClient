@@ -16,7 +16,7 @@
   <widget class="QWidget" name="centralwidget">
    <layout class="QVBoxLayout" name="verticalLayout">
     <item>
-     <widget class="QTextEdit" name="logTextEdit"/>
+     <widget class="QLineEdit" name="targetIdLineEdit"/>
     </item>
     <item>
      <widget class="QLineEdit" name="messageLineEdit"/>
@@ -29,9 +29,9 @@
      </widget>
     </item>
     <item>
-     <widget class="QPushButton" name="connectButton">
+     <widget class="QPushButton" name="callButton">
       <property name="text">
-       <string>Connect</string>
+       <string>PushButton</string>
       </property>
      </widget>
     </item>
