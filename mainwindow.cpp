@@ -11,7 +11,7 @@ using namespace rtc;
 MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(std::make_unique<Ui::MainWindow>()) {
 	ui->setupUi(this);
 	m_myId = QUuid::createUuid().toString(QUuid::WithoutBraces);
-	qDebug() << m_myId;
+	ui->myIdLabel->setText(m_myId);
 
 	SetupMQTT();
 	m_mqttClient->connectToHost();
@@ -115,6 +115,7 @@ void MainWindow::handleSignalingMessage(const QJsonObject& msg) {
 		m_peerConnection->setRemoteDescription(Description(sdp, type.toStdString()));
 
 	} else if (type == "candidate") {
+		if (!m_peerConnection) return;
 		std::string sdp = msg["candidate"].toString().toStdString();
 		std::string mid = msg["mid"].toString().toStdString();
 		m_peerConnection->addRemoteCandidate(Candidate(sdp, mid));
@@ -186,6 +187,11 @@ void MainWindow::wireDataChannel() {
 }
 
 void MainWindow::on_callButton_clicked() {
+	if (m_peerConnection) {
+		if (m_dataChannel) m_dataChannel->close();
+		m_peerConnection->close();
+	}
+
 	m_targetId = ui->targetIdLineEdit->text().trimmed();
 	SetupWebRTC();
 	m_dataChannel = m_peerConnection->createDataChannel("");
