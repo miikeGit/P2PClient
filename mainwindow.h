@@ -29,7 +29,7 @@ private slots:
 	void onMQTTReceived(const QMQTT::Message& message);
 	void on_sendFileButton_clicked();
 	void on_cancelButton_clicked();
-
+	void on_copyIdButton_clicked();
 private:
 	static constexpr qint64 CHUNK_SIZE = 16384;
 

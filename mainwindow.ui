@@ -18,7 +18,28 @@
     <item>
      <widget class="QLabel" name="transferSpeed">
       <property name="text">
-       <string>TextLabel</string>
+       <string>speed</string>
+      </property>
+     </widget>
+    </item>
+    <item>
+     <widget class="QLabel" name="fileNameLabel">
+      <property name="text">
+       <string>file</string>
+      </property>
+     </widget>
+    </item>
+    <item>
+     <widget class="QLabel" name="myIdLabel">
+      <property name="text">
+       <string>id</string>
+      </property>
+     </widget>
+    </item>
+    <item>
+     <widget class="QPushButton" name="copyIdButton">
+      <property name="text">
+       <string>copy</string>
       </property>
      </widget>
     </item>

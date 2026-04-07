@@ -5,6 +5,7 @@
 #include <QDebug>
 #include <QTimer>
 #include <QStandardPaths>
+#include <QClipboard>
 
 using namespace rtc;
 
@@ -212,6 +213,7 @@ void MainWindow::on_sendFileButton_clicked() {
 	meta["file_size"] = fileInfo.size();
 	m_dataChannel->send(QJsonDocument(meta).toJson(QJsonDocument::Compact).toStdString());
 
+	ui->fileNameLabel->setText(fileInfo.fileName());
 	ui->progressBar->setMaximum(fileInfo.size());
 	ui->progressBar->setValue(0);
 	m_isTransferring = true;
@@ -237,9 +239,16 @@ void MainWindow::on_sendFileButton_clicked() {
 		qint64 elapsedMs = m_transferSpeedTimer.elapsed();
 		if (elapsedMs > 1000) {
 			qint64 bytesSent = file->pos();
-			double BytesPerSec = ((bytesSent - m_lastSpeedCheckBytes) * 1000.0) / elapsedMs;
-			double MBps = BytesPerSec / (1024.0 * 1024.0);
-			QString status = QString("Speed: %1 MB/s").arg(MBps, 0, 'f', 2);
+			double bytesPerSec = ((bytesSent - m_lastSpeedCheckBytes) * 1000.0) / elapsedMs;
+			double MBps = bytesPerSec / (1024.0 * 1024.0);
+
+			qint64 remaining = file->size() - file->pos();
+			double eta = remaining / bytesPerSec;
+
+			QString status = QString("Speed: %1 MB/s | ETA: %2s")
+					.arg(MBps, 0, 'f', 2)
+					.arg((int)eta);
+
 			ui->transferSpeed->setText(status);
 			ui->progressBar->setValue(bytesSent);
 			m_transferSpeedTimer.restart();
@@ -262,4 +271,9 @@ void MainWindow::on_cancelButton_clicked() {
 
 	m_isTransferring = false;
 	ui->progressBar->setValue(0);
+}
+
+void MainWindow::on_copyIdButton_clicked() {
+	QClipboard *clipboard = QGuiApplication::clipboard();
+	clipboard->setText(m_myId);
 }
