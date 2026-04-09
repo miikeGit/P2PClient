@@ -3,7 +3,7 @@
 
 using namespace rtc;
 
-P2PClient::P2PClient(const QString &myId, QObject *parent) : QObject(parent), m_myId(myId) {
+P2PClient::P2PClient(const QString &myId, const AppConfig& config, QObject *parent) : QObject(parent), m_myId(myId), m_config(config) {
 	SetupMQTT();
 }
 
@@ -16,14 +16,9 @@ P2PClient::~P2PClient() {
 }
 
 void P2PClient::SetupMQTT() {
-	const QString hostName{"f15e0b8bb05c484bba3e1e7a82c464c3.s1.eu.hivemq.cloud"};
-	const quint16 port{8883};
-	const QString username{"throwaway"};
-	const QByteArray password{"Throwaway1"};
-
-	m_mqttClient = new QMQTT::Client(hostName, port, QSslConfiguration::defaultConfiguration(), false, this);
-	m_mqttClient->setUsername(username);
-	m_mqttClient->setPassword(password);
+	m_mqttClient = new QMQTT::Client(m_config.mqtt.host, m_config.mqtt.port, QSslConfiguration::defaultConfiguration(), false, this);
+	m_mqttClient->setUsername(m_config.mqtt.username);
+	m_mqttClient->setPassword(m_config.mqtt.password.toUtf8());
 	m_mqttClient->setClientId(m_myId);
 
 	connect(m_mqttClient, &QMQTT::Client::connected, this, &P2PClient::onMQTTConnected);
@@ -63,10 +58,15 @@ void P2PClient::SendSignalingMessage(const QJsonObject &message) {
 
 void P2PClient::SetupWebRTC() {
 	Configuration config;
-	config.iceServers.emplace_back("stun:stun.l.google.com:19302");
+
+	for (const auto& server : m_config.iceServers) {
+		IceServer iceServer(server.urls.toStdString());
+		if (!server.username.isEmpty()) iceServer.username = server.username.toStdString();
+		if (!server.password.isEmpty()) iceServer.password = server.password.toStdString();
+		config.iceServers.push_back(iceServer);
+	}
 
 	m_peerConnection = std::make_shared<PeerConnection>(config);
-
 	m_peerConnection->onLocalDescription([this](Description description) {
 		QJsonObject msg;
 		msg["type"] = QString::fromStdString(description.typeString());

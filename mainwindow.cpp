@@ -4,13 +4,16 @@
 #include <QClipboard>
 #include <QFileDialog>
 
+#include "appconfig.h"
+
 MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(std::make_unique<Ui::MainWindow>()) {
 	ui->setupUi(this);
 
 	m_myId = QUuid::createUuid().toString(QUuid::WithoutBraces);
 	ui->myIdLabel->setText(m_myId);
 
-	m_p2pClient = new P2PClient(m_myId, this);
+	QString configPath = qApp->applicationDirPath() + "/config.json";
+	m_p2pClient = new P2PClient(m_myId, AppConfig::load(configPath), this);
 	m_fileManager = new FileTransferManager(this);
 
 	connect(m_p2pClient, &P2PClient::binaryReceived, m_fileManager, &FileTransferManager::handleBinaryChunk);

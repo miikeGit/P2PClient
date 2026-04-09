@@ -10,10 +10,12 @@
 #include <qmqtt.h>
 #include <rtc/rtc.hpp>
 
+#include "appconfig.h"
+
 class P2PClient : public QObject {
 	Q_OBJECT
 public:
-	explicit P2PClient(const QString& myId, QObject *parent = nullptr);
+	explicit P2PClient(const QString& myId, const AppConfig& config, QObject *parent = nullptr);
 	~P2PClient();
 
 	void connectToBroker();
@@ -36,6 +38,8 @@ private slots:
 	void onMQTTReceived(const QMQTT::Message& message);
 
 private:
+	AppConfig m_config;
+
 	QString m_myId;
 	QString m_targetId;
 
