@@ -75,7 +75,9 @@ if(QT_VERSION_MAJOR GREATER_EQUAL 6)
 else()
     add_executable(P2PClient ${PROJECT_SOURCES}
         p2pclient.h p2pclient.cpp
-        filetransfermanager.h filetransfermanager.cpp)
+        filetransfermanager.h filetransfermanager.cpp
+        config.json
+        appconfig.h appconfig.cpp)
 endif()
 
 target_link_libraries(P2PClient PRIVATE
@@ -94,3 +96,9 @@ set_target_properties(P2PClient PROPERTIES
 if(QT_VERSION_MAJOR EQUAL 6)
     qt_finalize_executable(P2PClient)
 endif()
+
+add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different
+    "${CMAKE_CURRENT_SOURCE_DIR}/config.json"
+    "${CMAKE_CURRENT_BINARY_DIR}/config.json"
+)
