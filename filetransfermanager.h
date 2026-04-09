@@ -33,6 +33,9 @@ public slots:
 	void onPeerDisconnected();
 
 private:
+	QString m_expectedHash;
+	QString calculateSha256(const QString &filePath);
+
 	static constexpr qint64 CHUNK_SIZE = 16384;
 
 	QFile m_file;

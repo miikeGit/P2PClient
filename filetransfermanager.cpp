@@ -3,6 +3,7 @@
 #include <QFileInfo>
 #include <QJsonDocument>
 #include <QStandardPaths>
+#include <QCryptographicHash>
 
 FileTransferManager::FileTransferManager(QObject *parent) : QObject(parent) {}
 FileTransferManager::~FileTransferManager() {
@@ -30,6 +31,8 @@ void FileTransferManager::sendFile(const QString &filePath) {
 	QJsonObject meta;
 	meta["file_name"] = fileInfo.fileName();
 	meta["file_size"] = m_expectedFileSize;
+	meta["file_hash"] = calculateSha256(filePath);
+
 	emit sendJsonCommand(meta);
 	emit transferStarted(fileInfo.fileName(), m_expectedFileSize);
 
@@ -69,6 +72,7 @@ void FileTransferManager::handleJsonCommand(const QJsonObject &json) {
 	if (json.contains("file_name")) {
 		cleanup();
 		m_expectedFileSize = json["file_size"].toVariant().toLongLong();
+		m_expectedHash = json["file_hash"].toString();
 		m_receivedBytes = 0;
 
 		QString savePath = QStandardPaths::writableLocation(QStandardPaths::DownloadLocation) + "/" + json["file_name"].toString();
@@ -110,8 +114,16 @@ void FileTransferManager::handleBinaryChunk(const QByteArray &chunk) {
 	}
 
 	if (m_receivedBytes >= m_expectedFileSize) {
+		QString savedFilePath = m_file.fileName();
 		cleanup();
-		emit transferFinished();
+		QString downloadedHash = calculateSha256(savedFilePath);
+
+		if (downloadedHash == m_expectedHash) {
+			emit transferFinished();
+		} else {
+			QFile::remove(savedFilePath);
+			emit transferCanceled();
+		}
 	}
 }
 
@@ -135,4 +147,13 @@ void FileTransferManager::onPeerDisconnected() {
 	if (m_file.isOpen() && !m_isSending) m_file.remove();
 	cleanup();
 	emit transferCanceled();
+}
+
+QString FileTransferManager::calculateSha256(const QString &filePath) {
+	QFile file(filePath);
+	if (!file.open(QIODevice::ReadOnly)) return QString();
+
+	QCryptographicHash hash(QCryptographicHash::Sha256);
+	if (hash.addData(&file)) return QString(hash.result().toHex());
+	return QString();
 }
