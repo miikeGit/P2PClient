@@ -24,24 +24,21 @@ void P2PClient::SetupMQTT() {
 	m_mqttClient->setPassword(m_config.mqtt.password.toUtf8());
 	m_mqttClient->setClientId(m_myId);
 
-	connect(m_mqttClient, &QMQTT::Client::connected, this, &P2PClient::onMQTTConnected);
-	connect(m_mqttClient, &QMQTT::Client::received, this, &P2PClient::onMQTTReceived);
+	connect(m_mqttClient, &QMQTT::Client::connected, this, [this]() {
+		qDebug() << "Connected to broker";
+		m_mqttClient->subscribe(m_myId, 1);
+	});
+
+	connect(m_mqttClient, &QMQTT::Client::received, this, [this](const QMQTT::Message &message) {
+		QJsonDocument doc = QJsonDocument::fromJson(message.payload());
+		if (!doc.isNull() && doc.isObject()) {
+			handleSignalingMessage(doc.object());
+		}
+	});
 }
 
 void P2PClient::connectToBroker() {
 	m_mqttClient->connectToHost();
-}
-
-void P2PClient::onMQTTConnected() {
-	m_mqttClient->subscribe(m_myId, 1);
-	emit brokerConnected();
-}
-
-void P2PClient::onMQTTReceived(const QMQTT::Message &message) {
-	QJsonDocument doc = QJsonDocument::fromJson(message.payload());
-	if (!doc.isNull() && doc.isObject()) {
-		handleSignalingMessage(doc.object());
-	}
 }
 
 void P2PClient::SendSignalingMessage(const QJsonObject &message) {
