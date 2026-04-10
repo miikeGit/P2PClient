@@ -27,10 +27,16 @@ public:
 	QString getMyId() const { return m_myId; }
 
 signals:
+	void brokerConnected();
 	void connectionEstablished();
 	void connectionClosed();
 	void jsonReceived(const QJsonObject& json);
 	void binaryReceived(const QByteArray& data);
+
+private slots:
+	void onMQTTConnected();
+	void onMQTTReceived(const QMQTT::Message& message);
+
 private:
 	AppConfig m_config;
 
