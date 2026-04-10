@@ -7,7 +7,7 @@
     <x>0</x>
     <y>0</y>
     <width>400</width>
-    <height>300</height>
+    <height>402</height>
    </rect>
   </property>
   <property name="windowTitle">
@@ -171,6 +171,9 @@
          </item>
          <item>
           <widget class="QPushButton" name="cancelButton">
+           <property name="enabled">
+            <bool>false</bool>
+           </property>
            <property name="text">
             <string>Cancel</string>
            </property>

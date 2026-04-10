@@ -10,19 +10,25 @@ AppConfig AppConfig::load(const QString& filePath) {
 	QFile file(filePath);
 
 	if (file.open(QIODevice::ReadOnly)) {
+		qDebug() << "Successfully opened config file:" << filePath;
 		QJsonDocument doc = QJsonDocument::fromJson(file.readAll());
 		file.close();
 		QJsonObject root = doc.object();
 
 		if (root.contains("mqtt")) {
+			qDebug() << "Parsing MQTT configuration...";
 			QJsonObject mqttObj = root["mqtt"].toObject();
 			config.mqtt.host = mqttObj["host"].toString();
 			config.mqtt.port = mqttObj["port"].toInt();
 			config.mqtt.username = mqttObj["username"].toString();
 			config.mqtt.password = mqttObj["password"].toString();
 		}
+		else {
+			qWarning() << "MQTT section is MISSING in config.json!";
+		}
 
 		if (root.contains("webrtc")) {
+			qDebug() << "Parsing WebRTC configuration...";
 			QJsonObject webrtcObj = root["webrtc"].toObject();
 			if (webrtcObj.contains("ice_servers")) {
 				QJsonArray serversArr = webrtcObj["ice_servers"].toArray();
@@ -34,8 +40,16 @@ AppConfig AppConfig::load(const QString& filePath) {
 					ice.password = server["password"].toString();
 					config.iceServers.append(ice);
 				}
+				qInfo() << "Loaded" << config.iceServers.size() << "ICE server(s) from config";
+			}
+			else {
+				qWarning() << "WebRTC section is missing in config.json!";
 			}
 		}
+		qInfo() << "AppConfig loaded successfully";
+	}
+	else {
+		qCritical() << "Could not open config file at" << filePath;
 	}
 	return config;
 }

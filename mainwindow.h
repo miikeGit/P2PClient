@@ -24,10 +24,10 @@ private slots:
 
 private:
 	std::unique_ptr<Ui::MainWindow> ui;
-
-	QString m_myId;
 	P2PClient* m_p2pClient = nullptr;
 	FileTransferManager* m_fileManager = nullptr;
+
+	void ClearFileInfo();
 };
 
 #endif // MAINWINDOW_H

@@ -18,6 +18,7 @@ public:
 	void sendFile(const QString &filePath);
 	void cancelTransfer();
 
+	static QString calculateSha256(const QString &filePath);
 signals:
 	void sendJsonCommand(const QJsonObject &json);
 	void sendBinaryData(const QByteArray &data);
@@ -34,7 +35,6 @@ public slots:
 
 private:
 	QString m_expectedHash;
-	QString calculateSha256(const QString &filePath);
 
 	static constexpr qint64 CHUNK_SIZE = 16384;
 

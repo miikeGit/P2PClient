@@ -23,15 +23,22 @@ void FileTransferManager::cleanup() {
 void FileTransferManager::sendFile(const QString &filePath) {
 	cleanup();
 	m_file.setFileName(filePath);
-	if (!m_file.open(QIODevice::ReadOnly)) return;
+	if (!m_file.open(QIODevice::ReadOnly)) {
+		qCritical() << "Failed to open file for sending:" << filePath;
+		return;
+	}
 
 	QFileInfo fileInfo(m_file);
 	m_expectedFileSize = fileInfo.size();
 
+	qInfo() << "Preparing to send file:" << fileInfo.fileName() << "| Size:" << m_expectedFileSize << "bytes";
+	QString fileHash = calculateSha256(filePath);
+	qDebug() << "Calculated SHA-256 for outgoing file:" << fileHash;
+
 	QJsonObject meta;
 	meta["file_name"] = fileInfo.fileName();
 	meta["file_size"] = m_expectedFileSize;
-	meta["file_hash"] = calculateSha256(filePath);
+	meta["file_hash"] = fileHash;
 
 	emit sendJsonCommand(meta);
 	emit transferStarted(fileInfo.fileName(), m_expectedFileSize);
@@ -43,6 +50,7 @@ void FileTransferManager::sendFile(const QString &filePath) {
 	m_fileSenderTimer = new QTimer(this);
 	connect(m_fileSenderTimer, &QTimer::timeout, this, [this]() {
 		if (m_file.atEnd()) {
+			qInfo() << "All file chunks sent successfully.";
 			cleanup();
 			emit transferFinished();
 			return;
@@ -75,19 +83,32 @@ void FileTransferManager::handleJsonCommand(const QJsonObject &json) {
 		m_expectedHash = json["file_hash"].toString();
 		m_receivedBytes = 0;
 
+		qInfo() << "Incoming file metadata. "
+							 "Name: " << json["file_name"].toString() <<
+							 "\nExpected size: " << m_expectedFileSize <<
+							 "\nExpected hash: " << m_expectedHash;
+
 		QString savePath = QStandardPaths::writableLocation(QStandardPaths::DownloadLocation) + "/" + json["file_name"].toString();
 		m_file.setFileName(savePath);
 
 		if (m_file.open(QIODevice::WriteOnly)) {
+			qDebug() << "Successfully created local file for downloading at:" << savePath;
 			emit transferStarted(json["file_name"].toString(), m_expectedFileSize);
 			m_lastSpeedCheckBytes = 0;
 			m_transferSpeedTimer.start();
 		}
+		else {
+			qCritical() << "Failed to create local file for downloading at:" << savePath;
+		}
 	}
 	else if (json.contains("action")) {
 		QString action = json["action"].toString();
+		qWarning() << "Received action command from peer:" << action;
 		if (action == "cancel_transfer" || action == "receiver_canceled") {
-			if (!m_isSending && m_file.isOpen()) m_file.remove();
+			if (!m_isSending && m_file.isOpen()) {
+				qDebug() << "Deleting incomplete downloaded file";
+				m_file.remove();
+			}
 			cleanup();
 			emit transferCanceled();
 		}
@@ -114,13 +135,19 @@ void FileTransferManager::handleBinaryChunk(const QByteArray &chunk) {
 	}
 
 	if (m_receivedBytes >= m_expectedFileSize) {
+		qInfo() << "All bytes received. Verifying file integrity...";
 		QString savedFilePath = m_file.fileName();
 		cleanup();
 		QString downloadedHash = calculateSha256(savedFilePath);
 
 		if (downloadedHash == m_expectedHash) {
+			qInfo() << "File hashes match -" << downloadedHash;
 			emit transferFinished();
 		} else {
+			qCritical() << "Hash mismatch!"
+										 "\nExpected:" << m_expectedHash <<
+										 "\nGot:     " << downloadedHash <<
+										 "\nDeleting corrupted file";
 			QFile::remove(savedFilePath);
 			emit transferCanceled();
 		}
@@ -128,6 +155,7 @@ void FileTransferManager::handleBinaryChunk(const QByteArray &chunk) {
 }
 
 void FileTransferManager::cancelTransfer() {
+	qWarning() << "Canceling transfer locally";
 	QJsonObject cancelMsg;
 	if (m_isSending) {
 		cancelMsg["action"] = "cancel_transfer";
@@ -144,6 +172,7 @@ void FileTransferManager::cancelTransfer() {
 }
 
 void FileTransferManager::onPeerDisconnected() {
+	qWarning() << "Peer disconnected. Aborting active file transfers";
 	if (m_file.isOpen() && !m_isSending) m_file.remove();
 	cleanup();
 	emit transferCanceled();
@@ -151,7 +180,10 @@ void FileTransferManager::onPeerDisconnected() {
 
 QString FileTransferManager::calculateSha256(const QString &filePath) {
 	QFile file(filePath);
-	if (!file.open(QIODevice::ReadOnly)) return QString();
+	if (!file.open(QIODevice::ReadOnly)) {
+		qCritical() << "SHA-256 Error: Cannot open file" << filePath;
+		return QString();
+	}
 
 	QCryptographicHash hash(QCryptographicHash::Sha256);
 	if (hash.addData(&file)) return QString(hash.result().toHex());

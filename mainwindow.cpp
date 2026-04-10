@@ -1,19 +1,19 @@
 #include "mainwindow.h"
 #include "./ui_mainwindow.h"
-#include <QUuid>
 #include <QClipboard>
 #include <QFileDialog>
+#include <QMessageBox>
 
 #include "appconfig.h"
 
 MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(std::make_unique<Ui::MainWindow>()) {
 	ui->setupUi(this);
 
-	m_myId = QUuid::createUuid().toString(QUuid::WithoutBraces);
-	ui->myIdLabel->setText(m_myId);
-
 	QString configPath = qApp->applicationDirPath() + "/config.json";
-	m_p2pClient = new P2PClient(m_myId, AppConfig::load(configPath), this);
+	qDebug() << "Loading configuration from:" << configPath;
+
+	m_p2pClient = new P2PClient(AppConfig::load(configPath), this);
+	ui->myIdLabel->setText(m_p2pClient->getMyId());
 	m_fileManager = new FileTransferManager(this);
 
 	connect(m_p2pClient, &P2PClient::binaryReceived, m_fileManager, &FileTransferManager::handleBinaryChunk);
@@ -22,12 +22,22 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(std::make_uniq
 	connect(m_fileManager, &FileTransferManager::sendBinaryData, m_p2pClient, &P2PClient::sendBinary);
 	connect(m_fileManager, &FileTransferManager::sendJsonCommand, m_p2pClient, &P2PClient::sendJson);
 
-	connect(m_p2pClient, &P2PClient::connectionClosed, m_fileManager, &FileTransferManager::onPeerDisconnected);
-
+	connect(m_p2pClient, &P2PClient::connectionEstablished, this, [this]() {
+		QMessageBox::information(this, "Success!", "Connection established");
+		ui->callButton->setEnabled(false);
+	});
+	connect(m_p2pClient, &P2PClient::connectionClosed, this, [this]() {
+		m_fileManager->onPeerDisconnected();
+		ui->targetIdLineEdit->clear();
+		ui->callButton->setEnabled(true);
+		QMessageBox::warning(this, "Warning!", "Peer disconnected!");
+	});
 	connect(m_fileManager, &FileTransferManager::transferStarted, this, [this](QString name, qint64 size) {
+		qInfo() << "File transfer started";
 		ui->fileNameLabel->setText(name);
 		ui->progressBar->setMaximum(size);
 		ui->progressBar->setValue(0);
+		ui->cancelButton->setEnabled(true);
 	});
 
 	connect(m_fileManager, &FileTransferManager::progressUpdated, this, [this](qint64 cur, qint64 total) {
@@ -39,13 +49,17 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(std::make_uniq
 	});
 
 	connect(m_fileManager, &FileTransferManager::transferFinished, this, [this]() {
-		ui->progressBar->setValue(0);
+		qInfo() << "Transfer finished";
+		QMessageBox::information(this, "Success!", "File transfer finished successfully");
+		ClearFileInfo();
 	});
 
 	connect(m_fileManager, &FileTransferManager::transferCanceled, this, [this]() {
-		ui->progressBar->setValue(0);
+		qWarning() << "Transfer canceled";
+		ClearFileInfo();
 	});
 
+	qDebug() << "Connecting to broker...";
 	m_p2pClient->connectToBroker();
 }
 
@@ -54,21 +68,40 @@ MainWindow::~MainWindow() {}
 void MainWindow::on_callButton_clicked() {
 	QString target = ui->targetIdLineEdit->text().trimmed();
 	if (!target.isEmpty()) {
+		qInfo() << "Initiated call to ID:" << target;
 		m_p2pClient->call(target);
+	} else {
+		qWarning() << "Call button clicked, target ID is empty!";
+		QMessageBox::warning(this, "Error", "No target ID provided!");
 	}
 }
 
 void MainWindow::on_sendFileButton_clicked() {
+	qDebug() << "Opening File Dialog...";
 	QString path = QFileDialog::getOpenFileName(this);
+
 	if (!path.isEmpty()) {
+		qInfo() << "Selected file to send:" << path;
 		m_fileManager->sendFile(path);
+	}
+	else {
+		qDebug() << "File selection canceled";
 	}
 }
 
 void MainWindow::on_cancelButton_clicked() {
+	qWarning() << "Cancel transfer button clicked";
 	m_fileManager->cancelTransfer();
 }
 
 void MainWindow::on_copyIdButton_clicked() {
-	QGuiApplication::clipboard()->setText(m_myId);
+	qDebug() << "Local ID copied to clipboard.";
+	QGuiApplication::clipboard()->setText(ui->myIdLabel->text());
+}
+
+void MainWindow::ClearFileInfo() {
+	ui->progressBar->setValue(0);
+	ui->fileNameLabel->clear();
+	ui->cancelButton->setEnabled(false);
+	ui->transferSpeed->clear();
 }
