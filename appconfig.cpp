@@ -20,11 +20,9 @@ AppConfig AppConfig::load(const QString& filePath) {
 			QJsonObject mqttObj = root["mqtt"].toObject();
 			config.mqtt.host = mqttObj["host"].toString();
 			config.mqtt.port = mqttObj["port"].toInt();
-			config.mqtt.username = mqttObj["username"].toString();
-			config.mqtt.password = mqttObj["password"].toString();
 		}
 		else {
-			qWarning() << "MQTT section is MISSING in config.json!";
+			qWarning() << "MQTT section is missing in config.json!";
 		}
 
 		if (root.contains("webrtc")) {

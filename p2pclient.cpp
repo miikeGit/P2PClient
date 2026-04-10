@@ -20,8 +20,6 @@ P2PClient::~P2PClient() {
 
 void P2PClient::SetupMQTT() {
 	m_mqttClient = new QMQTT::Client(m_config.mqtt.host, m_config.mqtt.port, QSslConfiguration::defaultConfiguration(), false, this);
-	m_mqttClient->setUsername(m_config.mqtt.username);
-	m_mqttClient->setPassword(m_config.mqtt.password.toUtf8());
 	m_mqttClient->setClientId(m_myId);
 
 	connect(m_mqttClient, &QMQTT::Client::connected, this, &P2PClient::onMQTTConnected);

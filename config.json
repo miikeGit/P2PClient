@@ -1,9 +1,7 @@
 {
   "mqtt": {
-    "host": "f15e0b8bb05c484bba3e1e7a82c464c3.s1.eu.hivemq.cloud",
-    "port": 8883,
-    "username": "throwaway",
-    "password": "Throwaway1"
+    "host": "broker.emqx.io",
+    "port": 8883
   },
   "webrtc": {
     "ice_servers": [
