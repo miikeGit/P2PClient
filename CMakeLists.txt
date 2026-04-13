@@ -8,7 +8,6 @@ set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 if(WIN32)
-    add_compile_definitions(WIN32_LEAN_AND_MEAN)
     set(PLATFORM_LIBS ws2_32 iphlpapi)
 endif()
 
@@ -30,10 +29,26 @@ FetchContent_Declare(
 
 FetchContent_MakeAvailable(mbedtls)
 
-set(MbedTLS_INCLUDE_DIR "${mbedtls_SOURCE_DIR}/include" CACHE PATH "" FORCE)
-set(MbedTLS_LIBRARY     "${mbedtls_BINARY_DIR}/library/libmbedtls${CMAKE_STATIC_LIBRARY_SUFFIX}"   CACHE FILEPATH "" FORCE)
-set(MbedCrypto_LIBRARY  "${mbedtls_BINARY_DIR}/library/libmbedcrypto${CMAKE_STATIC_LIBRARY_SUFFIX}" CACHE FILEPATH "" FORCE)
-set(MbedX509_LIBRARY    "${mbedtls_BINARY_DIR}/library/libmbedx509${CMAKE_STATIC_LIBRARY_SUFFIX}"  CACHE FILEPATH "" FORCE)
+file(APPEND "${mbedtls_SOURCE_DIR}/include/mbedtls/mbedtls_config.h" "
+#define MBEDTLS_SSL_DTLS_SRTP
+#define MBEDTLS_PK_WRITE_C
+#define MBEDTLS_X509_CRT_WRITE_C
+#define MBEDTLS_X509_CREATE_C
+#define MBEDTLS_PEM_WRITE_C
+")
+
+set(MbedTLS_INCLUDE_DIR "${mbedtls_SOURCE_DIR}/include" CACHE PATH "MbedTLS include dir" FORCE)
+
+if(MSVC)
+    set(MbedTLS_LIBRARY    "${mbedtls_BINARY_DIR}/library/${CMAKE_CFG_INTDIR}/mbedtls.lib"    CACHE FILEPATH "MbedTLS library" FORCE)
+    set(MbedCrypto_LIBRARY "${mbedtls_BINARY_DIR}/library/${CMAKE_CFG_INTDIR}/mbedcrypto.lib" CACHE FILEPATH "MbedCrypto library" FORCE)
+    set(MbedX509_LIBRARY   "${mbedtls_BINARY_DIR}/library/${CMAKE_CFG_INTDIR}/mbedx509.lib"   CACHE FILEPATH "MbedX509 library" FORCE)
+else()
+    set(MbedTLS_LIBRARY    "${mbedtls_BINARY_DIR}/library/libmbedtls.a"    CACHE FILEPATH "MbedTLS library" FORCE)
+    set(MbedCrypto_LIBRARY "${mbedtls_BINARY_DIR}/library/libmbedcrypto.a" CACHE FILEPATH "MbedCrypto library" FORCE)
+    set(MbedX509_LIBRARY   "${mbedtls_BINARY_DIR}/library/libmbedx509.a"   CACHE FILEPATH "MbedX509 library" FORCE)
+endif()
+set(MbedTLS_FOUND TRUE CACHE BOOL "MbedTLS found status" FORCE)
 
 FetchContent_Declare(
     qmqtt
@@ -46,6 +61,7 @@ set(NO_WEBSOCKETS      ON  CACHE INTERNAL "")
 set(USE_MBEDTLS        ON  CACHE INTERNAL "")
 set(USE_SYSTEM_SRTP    OFF CACHE INTERNAL "")
 set(WARNINGS_AS_ERRORS OFF CACHE INTERNAL "")
+
 FetchContent_Declare(
     datachannel
     GIT_REPOSITORY https://github.com/paullouisageneau/libdatachannel.git
@@ -53,20 +69,11 @@ FetchContent_Declare(
 
 FetchContent_MakeAvailable(qmqtt datachannel)
 
-set(MBEDTLS_WEBRTC_DEFS
-    MBEDTLS_SSL_DTLS_SRTP
-    MBEDTLS_PK_WRITE_C
-    MBEDTLS_X509_CRT_WRITE_C
-    MBEDTLS_X509_CREATE_C
-    MBEDTLS_PEM_WRITE_C)
-target_compile_definitions(mbedcrypto  PUBLIC ${MBEDTLS_WEBRTC_DEFS})
-target_compile_definitions(datachannel PUBLIC MBEDTLS_SSL_DTLS_SRTP)
-
-set(MBEDTLS_LIBS
-    "${mbedtls_BINARY_DIR}/library/libmbedtls${CMAKE_STATIC_LIBRARY_SUFFIX}"
-    "${mbedtls_BINARY_DIR}/library/libmbedx509${CMAKE_STATIC_LIBRARY_SUFFIX}"
-    "${mbedtls_BINARY_DIR}/library/libmbedcrypto${CMAKE_STATIC_LIBRARY_SUFFIX}")
-target_link_libraries(datachannel PRIVATE -Wl,--start-group ${MBEDTLS_LIBS} -Wl,--end-group)
+if(MSVC)
+    target_link_libraries(datachannel PRIVATE mbedtls mbedx509 mbedcrypto)
+else()
+    target_link_libraries(datachannel PRIVATE -Wl,--start-group mbedtls mbedx509 mbedcrypto -Wl,--end-group)
+endif()
 
 set(COMMON_SOURCES
     p2pclient.h p2pclient.cpp
@@ -103,6 +110,7 @@ add_custom_command(TARGET P2PClient POST_BUILD
     "${CMAKE_CURRENT_SOURCE_DIR}/config.json"
     "${CMAKE_CURRENT_BINARY_DIR}/config.json"
 )
+
 
 enable_testing()
 
