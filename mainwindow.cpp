@@ -26,12 +26,15 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(std::make_uniq
 		QMessageBox::information(this, "Success!", "Connection established");
 		ui->callButton->setEnabled(false);
 	});
+
 	connect(m_p2pClient, &P2PClient::connectionClosed, this, [this]() {
 		m_fileManager->onPeerDisconnected();
 		ui->targetIdLineEdit->clear();
 		ui->callButton->setEnabled(true);
+		ui->progressBar->setValue(0);
 		QMessageBox::warning(this, "Warning!", "Peer disconnected!");
 	});
+
 	connect(m_fileManager, &FileTransferManager::transferStarted, this, [this](QString name, qint64 size) {
 		qInfo() << "File transfer started";
 		ui->fileNameLabel->setText(name);
@@ -45,7 +48,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(std::make_uniq
 	});
 
 	connect(m_fileManager, &FileTransferManager::speedUpdated, this, [this](double mbps, int eta) {
-		ui->transferSpeed->setText(QString("Bandwidth: %1 MB/s | ETA: %2 seconds").arg(mbps, 0, 'f', 2).arg(eta));
+		ui->statusLabel->setText(QString("Bandwidth: %1 MB/s | ETA: %2 seconds").arg(mbps, 0, 'f', 2).arg(eta));
 	});
 
 	connect(m_fileManager, &FileTransferManager::transferFinished, this, [this]() {
@@ -59,7 +62,12 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(std::make_uniq
 		ClearFileInfo();
 	});
 
-	qDebug() << "Connecting to broker...";
+	connect(m_p2pClient, &P2PClient::connectionStateChanged, this, [this](int step, QString status, int maxSteps) {
+		ui->progressBar->setMaximum(maxSteps);
+		ui->progressBar->setValue(step);
+		ui->statusLabel->setText(status);
+	});
+
 	m_p2pClient->connectToBroker();
 }
 
@@ -103,5 +111,5 @@ void MainWindow::ClearFileInfo() {
 	ui->progressBar->setValue(0);
 	ui->fileNameLabel->clear();
 	ui->cancelButton->setEnabled(false);
-	ui->transferSpeed->clear();
+	ui->statusLabel->setText("Ready");
 }

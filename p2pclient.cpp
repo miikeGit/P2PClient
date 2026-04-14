@@ -27,6 +27,7 @@ void P2PClient::SetupMQTT() {
 }
 
 void P2PClient::connectToBroker() {
+	qDebug() << "Connecting to broker...";
 	m_mqttClient->connectToHost();
 }
 
@@ -63,8 +64,10 @@ void P2PClient::SendSignalingMessage(const QJsonObject &message) {
 
 void P2PClient::SetupWebRTC() {
 	qInfo() << "Initializing WebRTC PeerConnection...";
+	emit connectionStateChanged(2, "Initializing WebRTC PeerConnection...");
 	Configuration config;
 
+	emit connectionStateChanged(3, "Adding ICE servers");
 	for (const auto& server : m_config.iceServers) {
 		qDebug() << "Adding ICE server: " << server.urls;
 		IceServer iceServer(server.urls.toStdString());
@@ -77,7 +80,6 @@ void P2PClient::SetupWebRTC() {
 	m_peerConnection->onLocalDescription([this](Description description) {
 		qInfo() << "Generated Local SDP Description. Type: " << QString::fromStdString(description.typeString());
 		qDebug() << "Local SDP Payload:\n" << QString::fromStdString(std::string(description));
-
 		QJsonObject msg;
 		msg["type"] = QString::fromStdString(description.typeString());
 		msg["sdp"] = QString::fromStdString(std::string(description));
@@ -86,7 +88,6 @@ void P2PClient::SetupWebRTC() {
 
 	m_peerConnection->onLocalCandidate([this](Candidate candidate) {
 		qDebug() << "Got local ICE candidate:" << QString::fromStdString(std::string(candidate));
-
 		QJsonObject msg;
 		msg["type"] = "candidate";
 		msg["candidate"] = QString::fromStdString(std::string(candidate));
@@ -99,7 +100,10 @@ void P2PClient::SetupWebRTC() {
 			QString stateStr;
 			switch(state) {
 				case PeerConnection::State::New:					stateStr = "New";					 break;
-				case PeerConnection::State::Connecting:		stateStr = "Connecting";   break;
+				case PeerConnection::State::Connecting:
+					stateStr = "Connecting";
+					emit connectionStateChanged(4, "Establishing P2P connection...");
+					break;
 				case PeerConnection::State::Connected:		stateStr = "Connected";    break;
 				case PeerConnection::State::Disconnected: stateStr = "Disconnected"; break;
 				case PeerConnection::State::Failed:				stateStr = "Failed";			 break;
@@ -136,6 +140,8 @@ void P2PClient::handleSignalingMessage(const QJsonObject &msg) {
 	}
 
 	if (type == "offer") {
+		emit connectionStateChanged(3, "Incoming connection...");
+
 		m_targetId = msg["from"].toString();
 		std::string sdp = msg["sdp"].toString().toStdString();
 		qDebug() << "Received remote offer SDP:\n" << QString::fromStdString(sdp);
@@ -165,6 +171,7 @@ void P2PClient::wireDataChannel() {
 	m_dataChannel->onOpen([this]() {
 		QMetaObject::invokeMethod(this, [this]() {
 			qInfo() << "WebRTC DataChannel opened successfully!";
+			emit connectionStateChanged(5, "Connection established!");
 			emit connectionEstablished();
 		});
 	});
@@ -204,6 +211,7 @@ void P2PClient::call(const QString &targetId) {
 	}
 
 	qInfo() << "Initiating call to target:" << targetId;
+	emit connectionStateChanged(1, "Connecting to target...");
 	closeConnection();
 	m_targetId = targetId;
 	SetupWebRTC();

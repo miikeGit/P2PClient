@@ -32,6 +32,7 @@ signals:
 	void connectionClosed();
 	void jsonReceived(const QJsonObject& json);
 	void binaryReceived(const QByteArray& data);
+	void connectionStateChanged(int step, QString statusName, int maxSteps = 5);
 
 private slots:
 	void onMQTTConnected();
