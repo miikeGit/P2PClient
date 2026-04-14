@@ -18,15 +18,15 @@ public:
 	void sendFile(const QString &filePath);
 	void cancelTransfer();
 
-	static QString calculateSha256(const QString &filePath);
 signals:
 	void sendJsonCommand(const QJsonObject &json);
 	void sendBinaryData(const QByteArray &data);
-	void transferStarted(const QString &fileName, qint64 fileSize);
+	void transferStarted(const QString &fileName);
 	void progressUpdated(qint64 current, qint64 total);
 	void speedUpdated(double mbps, int eta);
 	void transferFinished();
 	void transferCanceled();
+	void hashProgressUpdated(qint64 current, qint64 total);
 
 public slots:
 	void handleJsonCommand(const QJsonObject &json);
@@ -47,8 +47,10 @@ private:
 	qint64 m_lastSpeedCheckBytes = 0;
 
 	bool m_isSending = false;
+	bool m_cancelTransfer = false;
 
 	void cleanup();
+	QString calculateSha256();
 };
 
 #endif // FILETRANSFERMANAGER_H

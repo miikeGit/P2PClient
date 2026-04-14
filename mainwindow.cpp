@@ -37,16 +37,17 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(std::make_uniq
 		QMessageBox::warning(this, "Warning!", "Peer disconnected!");
 	});
 
-	connect(m_fileManager, &FileTransferManager::transferStarted, this, [this](QString name, qint64 size) {
+	connect(m_fileManager, &FileTransferManager::transferStarted, this, [this](QString name) {
 		qInfo() << "File transfer started";
 		ui->fileNameLabel->setText(name);
-		ui->progressBar->setMaximum(size);
+		ui->progressBar->setMaximum(100);
 		ui->progressBar->setValue(0);
 		ui->cancelButton->setEnabled(true);
 	});
 
 	connect(m_fileManager, &FileTransferManager::progressUpdated, this, [this](qint64 cur, qint64 total) {
-		ui->progressBar->setValue(cur);
+		int percent = (total > 0) ? static_cast<int>((cur * 100) / total) : 0;
+		ui->progressBar->setValue(percent);
 	});
 
 	connect(m_fileManager, &FileTransferManager::speedUpdated, this, [this](double mbps, int eta) {
@@ -68,6 +69,13 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(std::make_uniq
 		ui->progressBar->setMaximum(maxSteps);
 		ui->progressBar->setValue(step);
 		ui->statusLabel->setText(status);
+	});
+
+	connect(m_fileManager, &FileTransferManager::hashProgressUpdated, this, [this](qint64 current, qint64 total) {
+		ui->progressBar->setMaximum(100);
+		int percent = (total > 0) ? static_cast<int>((current * 100) / total) : 0;
+		ui->progressBar->setValue(percent);
+		ui->statusLabel->setText("Calculating hash...");
 	});
 
 	m_p2pClient->connectToBroker();
@@ -92,6 +100,8 @@ void MainWindow::on_sendFileButton_clicked() {
 
 	if (!path.isEmpty()) {
 		qInfo() << "Selected file to send:" << path;
+		ui->cancelButton->setEnabled(true);
+		ui->statusLabel->setText("Calculating hash...");
 		m_fileManager->sendFile(path);
 	}
 	else {

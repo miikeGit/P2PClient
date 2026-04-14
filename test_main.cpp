@@ -13,6 +13,20 @@ class P2PTests : public QObject {
 	Q_OBJECT
 
 private slots:
+
+	QString calculateTestHash(const QString &filePath) {
+		QFile file(filePath);
+		if (!file.open(QIODevice::ReadOnly)) {
+			return QString();
+		}
+
+		QCryptographicHash hash(QCryptographicHash::Sha256);
+		if (hash.addData(&file)) {
+			return QString(hash.result().toHex());
+		}
+		return QString();
+	}
+
 	void testConnectAndTransfer() {
 		AppConfig config = AppConfig::load("config.json");
 
@@ -58,9 +72,9 @@ private slots:
 
 		QVERIFY2(clientBTransferFinishedSpy.wait(15000), "File transfer timeout");
 
-		QString originalHash = FileTransferManager::calculateSha256(testFileName);
+		QString originalHash = calculateTestHash(testFileName);
 		QString downloadedFilePath = QStandardPaths::writableLocation(QStandardPaths::DownloadLocation) + "/" + testFileName;
-		QString downloadedHash = FileTransferManager::calculateSha256(downloadedFilePath);
+		QString downloadedHash = calculateTestHash(downloadedFilePath);
 
 		QCOMPARE(originalHash, downloadedHash);
 
@@ -143,9 +157,9 @@ private slots:
 
 		QVERIFY2(clientBTransferFinishedSpy.wait(30000), "File transfer timeout");
 
-		QString originalHash = FileTransferManager::calculateSha256(testFileName);
+		QString originalHash = calculateTestHash(testFileName);
 		QString downloadedFilePath = QStandardPaths::writableLocation(QStandardPaths::DownloadLocation) + "/" + testFileName;
-		QString downloadedHash = FileTransferManager::calculateSha256(downloadedFilePath);
+		QString downloadedHash = calculateTestHash(downloadedFilePath);
 
 		QCOMPARE(originalHash, downloadedHash);
 
