@@ -25,6 +25,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(std::make_uniq
 	connect(m_p2pClient, &P2PClient::connectionEstablished, this, [this]() {
 		QMessageBox::information(this, "Success!", "Connection established");
 		ui->callButton->setEnabled(false);
+		ui->sendFileButton->setEnabled(true);
 	});
 
 	connect(m_p2pClient, &P2PClient::connectionClosed, this, [this]() {
@@ -32,6 +33,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(std::make_uniq
 		ui->targetIdLineEdit->clear();
 		ui->callButton->setEnabled(true);
 		ui->progressBar->setValue(0);
+		ui->sendFileButton->setEnabled(false);
 		QMessageBox::warning(this, "Warning!", "Peer disconnected!");
 	});
 
