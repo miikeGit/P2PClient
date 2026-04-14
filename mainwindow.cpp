@@ -81,6 +81,10 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), m_appConfig(AppCo
 		ui->statusLabel->setText("Calculating hash...");
 	});
 
+	connect(ui->speedLimitSpinBox, QOverload<int>::of(&QSpinBox::valueChanged), this, [this](int value) {
+		m_fileManager->setSpeedLimit(value);
+	});
+
 	m_p2pClient->connectToBroker();
 }
 
@@ -141,6 +145,6 @@ void MainWindow::ClearFileInfo() {
 	ui->progressBar->setValue(0);
 	ui->fileNameLabel->clear();
 	ui->cancelButton->setEnabled(false);
-	ui->statusLabel->setText("Ready");
+	ui->statusLabel->clear();
 	ui->selectDownloadPathButton->setEnabled(true);
 }

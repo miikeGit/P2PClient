@@ -6,12 +6,15 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>527</width>
-    <height>498</height>
+    <width>258</width>
+    <height>440</height>
    </rect>
   </property>
   <property name="windowTitle">
    <string>P2P Client</string>
+  </property>
+  <property name="windowIcon">
+   <iconset theme="QIcon::ThemeIcon::NetworkWireless"/>
   </property>
   <widget class="QWidget" name="centralwidget">
    <layout class="QVBoxLayout" name="verticalLayout_main">
@@ -161,7 +164,7 @@
          <item>
           <widget class="QLabel" name="statusLabel">
            <property name="text">
-            <string>Ready</string>
+            <string/>
            </property>
           </widget>
          </item>
@@ -192,6 +195,31 @@
        </item>
        <item>
         <layout class="QHBoxLayout" name="horizontalLayout_path">
+         <item>
+          <widget class="QSpinBox" name="speedLimitSpinBox">
+           <property name="toolTip">
+            <string>Set maximum speed</string>
+           </property>
+           <property name="specialValueText">
+            <string>Unlimited</string>
+           </property>
+           <property name="suffix">
+            <string>KB/s</string>
+           </property>
+           <property name="prefix">
+            <string/>
+           </property>
+           <property name="maximum">
+            <number>100000</number>
+           </property>
+           <property name="singleStep">
+            <number>500</number>
+           </property>
+           <property name="value">
+            <number>0</number>
+           </property>
+          </widget>
+         </item>
          <item>
           <widget class="QLineEdit" name="downloadPath">
            <property name="toolTip">

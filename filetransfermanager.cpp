@@ -83,7 +83,8 @@ void FileTransferManager::sendFile(const QString &filePath) {
 			m_lastSpeedCheckBytes = bytesSent;
 		}
 	});
-	m_fileSenderTimer->start(0);
+	setSpeedLimit(m_speedLimitKbps);
+	m_fileSenderTimer->start();
 }
 
 void FileTransferManager::handleJsonCommand(const QJsonObject &json) {
@@ -224,4 +225,17 @@ QString FileTransferManager::calculateSha256() {
 	}
 
 	return QString(hash.result().toHex());
+}
+
+void FileTransferManager::setSpeedLimit(int kbps) {
+	m_speedLimitKbps = kbps;
+
+	if (m_fileSenderTimer) {
+		if (m_speedLimitKbps > 0) {
+			int delayMs = (16.0 / m_speedLimitKbps) * 1000;
+			m_fileSenderTimer->setInterval(qMax(1, delayMs));
+		} else {
+			m_fileSenderTimer->setInterval(0); // no limit
+		}
+	}
 }

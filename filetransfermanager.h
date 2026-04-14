@@ -33,6 +33,7 @@ public slots:
 	void handleJsonCommand(const QJsonObject &json);
 	void handleBinaryChunk(const QByteArray &chunk);
 	void onPeerDisconnected();
+	void setSpeedLimit(int kbps);
 
 private:
 	QString m_expectedHash;
@@ -47,6 +48,7 @@ private:
 	qint64 m_expectedFileSize = 0;
 	qint64 m_receivedBytes = 0;
 	qint64 m_lastSpeedCheckBytes = 0;
+	qint64 m_speedLimitKbps = 0;
 
 	bool m_isSending = false;
 	bool m_cancelTransfer = false;
