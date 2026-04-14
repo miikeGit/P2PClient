@@ -75,8 +75,14 @@
          </item>
          <item>
           <widget class="QPushButton" name="copyIdButton">
-           <property name="text">
+           <property name="toolTip">
             <string>Copy ID</string>
+           </property>
+           <property name="text">
+            <string/>
+           </property>
+           <property name="icon">
+            <iconset theme="edit-copy"/>
            </property>
           </widget>
          </item>
@@ -199,19 +205,6 @@
            </property>
            <property name="placeholderText">
             <string>Select where to save transfered files</string>
-           </property>
-          </widget>
-         </item>
-         <item>
-          <widget class="QPushButton" name="selectDownloadPathButton">
-           <property name="toolTip">
-            <string>Select where to save transfered files</string>
-           </property>
-           <property name="text">
-            <string/>
-           </property>
-           <property name="icon">
-            <iconset theme="folder"/>
            </property>
           </widget>
          </item>
