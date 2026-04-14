@@ -208,6 +208,19 @@
            </property>
           </widget>
          </item>
+         <item>
+          <widget class="QPushButton" name="selectDownloadPathButton">
+           <property name="toolTip">
+            <string>Select where to save transfered files</string>
+           </property>
+           <property name="text">
+            <string/>
+           </property>
+           <property name="icon">
+            <iconset theme="folder"/>
+           </property>
+          </widget>
+         </item>
         </layout>
        </item>
       </layout>
