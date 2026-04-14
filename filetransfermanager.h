@@ -17,6 +17,7 @@ public:
 
 	void sendFile(const QString &filePath);
 	void cancelTransfer();
+	void setDownloadPath(const QString &path) { m_downloadPath = path; }
 
 signals:
 	void sendJsonCommand(const QJsonObject &json);
@@ -35,6 +36,7 @@ public slots:
 
 private:
 	QString m_expectedHash;
+	QString m_downloadPath;
 
 	static constexpr qint64 CHUNK_SIZE = 16384;
 

@@ -6,15 +6,17 @@
 
 #include "appconfig.h"
 
-MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(std::make_unique<Ui::MainWindow>()) {
+MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), m_appConfig(AppConfig::load(m_configPath)), ui(std::make_unique<Ui::MainWindow>()) {
 	ui->setupUi(this);
 
-	QString configPath = qApp->applicationDirPath() + "/config.json";
-	qDebug() << "Loading configuration from:" << configPath;
+	qDebug() << "Loading configuration from:" << m_configPath;
 
-	m_p2pClient = new P2PClient(AppConfig::load(configPath), this);
+	m_p2pClient = new P2PClient(m_appConfig, this);
 	ui->myIdLabel->setText(m_p2pClient->getMyId());
 	m_fileManager = new FileTransferManager(this);
+
+	ui->downloadPath->setText(m_appConfig.downloadPath);
+	m_fileManager->setDownloadPath(m_appConfig.downloadPath);
 
 	connect(m_p2pClient, &P2PClient::binaryReceived, m_fileManager, &FileTransferManager::handleBinaryChunk);
 	connect(m_p2pClient, &P2PClient::jsonReceived, m_fileManager, &FileTransferManager::handleJsonCommand);
@@ -43,6 +45,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(std::make_uniq
 		ui->progressBar->setMaximum(100);
 		ui->progressBar->setValue(0);
 		ui->cancelButton->setEnabled(true);
+		ui->selectDownloadPathButton->setEnabled(false);
 	});
 
 	connect(m_fileManager, &FileTransferManager::progressUpdated, this, [this](qint64 cur, qint64 total) {
@@ -119,9 +122,25 @@ void MainWindow::on_copyIdButton_clicked() {
 	QGuiApplication::clipboard()->setText(ui->myIdLabel->text());
 }
 
+void MainWindow::on_selectDownloadPathButton_clicked() {
+	QString currentPath = ui->downloadPath->text();
+	QString dir = QFileDialog::getExistingDirectory(this, "Select download destination...", currentPath,
+																									QFileDialog::ShowDirsOnly | QFileDialog::DontResolveSymlinks);
+	if (!dir.isEmpty()) {
+		ui->downloadPath->setText(dir);
+		m_fileManager->setDownloadPath(dir);
+
+		m_appConfig.downloadPath = dir;
+		if (m_appConfig.save(m_configPath)) {
+			qInfo() << "Download path saved to config.json:" << dir;
+		}
+	}
+}
+
 void MainWindow::ClearFileInfo() {
 	ui->progressBar->setValue(0);
 	ui->fileNameLabel->clear();
 	ui->cancelButton->setEnabled(false);
 	ui->statusLabel->setText("Ready");
+	ui->selectDownloadPathButton->setEnabled(true);
 }

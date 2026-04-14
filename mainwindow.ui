@@ -6,8 +6,8 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>426</width>
-    <height>425</height>
+    <width>527</width>
+    <height>498</height>
    </rect>
   </property>
   <property name="windowTitle">
@@ -179,6 +179,39 @@
            </property>
            <property name="text">
             <string>Cancel</string>
+           </property>
+          </widget>
+         </item>
+        </layout>
+       </item>
+       <item>
+        <layout class="QHBoxLayout" name="horizontalLayout_path">
+         <item>
+          <widget class="QLineEdit" name="downloadPath">
+           <property name="toolTip">
+            <string>Select where to save transfered files</string>
+           </property>
+           <property name="text">
+            <string/>
+           </property>
+           <property name="readOnly">
+            <bool>true</bool>
+           </property>
+           <property name="placeholderText">
+            <string>Select where to save transfered files</string>
+           </property>
+          </widget>
+         </item>
+         <item>
+          <widget class="QPushButton" name="selectDownloadPathButton">
+           <property name="toolTip">
+            <string>Select where to save transfered files</string>
+           </property>
+           <property name="text">
+            <string/>
+           </property>
+           <property name="icon">
+            <iconset theme="folder"/>
            </property>
           </widget>
          </item>

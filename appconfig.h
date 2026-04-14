@@ -21,8 +21,10 @@ struct IceServerConfig {
 struct AppConfig {
 		MqttConfig mqtt;
 		QList<IceServerConfig> iceServers;
-		static void extracted(AppConfig &config, QJsonArray &serversArr);
+		QString downloadPath;
+
 		static AppConfig load(const QString &filePath);
+		bool save(const QString &filePath) const;
 };
 
 #endif // APPCONFIG_H

@@ -98,7 +98,7 @@ void FileTransferManager::handleJsonCommand(const QJsonObject &json) {
 							 "\nExpected size: " << m_expectedFileSize <<
 							 "\nExpected hash: " << m_expectedHash;
 
-		QString savePath = QStandardPaths::writableLocation(QStandardPaths::DownloadLocation) + "/" + json["file_name"].toString();
+		QString savePath = m_downloadPath + "/" + json["file_name"].toString();
 		m_file.setFileName(savePath);
 
 		if (m_file.open(QIODevice::WriteOnly)) {

@@ -2,6 +2,7 @@
 #define MAINWINDOW_H
 
 #include <QMainWindow>
+#include <QApplication>
 #include <memory>
 #include "p2pclient.h"
 #include "filetransfermanager.h"
@@ -21,11 +22,15 @@ private slots:
 	void on_sendFileButton_clicked();
 	void on_cancelButton_clicked();
 	void on_copyIdButton_clicked();
+	void on_selectDownloadPathButton_clicked();
 
 private:
 	std::unique_ptr<Ui::MainWindow> ui;
 	P2PClient* m_p2pClient = nullptr;
 	FileTransferManager* m_fileManager = nullptr;
+
+	QString m_configPath = qApp->applicationDirPath() + "/config.json";
+	AppConfig m_appConfig;
 
 	void ClearFileInfo();
 };
