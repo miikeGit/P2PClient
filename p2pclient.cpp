@@ -7,18 +7,15 @@ P2PClient::P2PClient(const AppConfig& config, QObject *parent) : QObject(parent)
 	m_myId = QUuid::createUuid().toString(QUuid::WithoutBraces);
 	qInfo() << "Local ID:" << m_myId;
 
-	SetupMQTT();
+	setupMQTT();
 }
 
 P2PClient::~P2PClient() {
 	closeConnection();
-	if (m_mqttClient) {
-		m_mqttClient->disconnectFromHost();
-		m_mqttClient->deleteLater();
-	}
+	m_mqttClient->disconnectFromHost();
 }
 
-void P2PClient::SetupMQTT() {
+void P2PClient::setupMQTT() {
 	m_mqttClient = new QMQTT::Client(m_config.mqtt.host, m_config.mqtt.port, QSslConfiguration::defaultConfiguration(), false, this);
 	m_mqttClient->setClientId(m_myId);
 
@@ -38,13 +35,11 @@ void P2PClient::onMQTTConnected() {
 }
 
 void P2PClient::onMQTTReceived(const QMQTT::Message &message) {
-	QJsonDocument doc = QJsonDocument::fromJson(message.payload());
-	if (!doc.isNull() && doc.isObject()) {
-		handleSignalingMessage(doc.object());
-	}
+	auto doc = QJsonDocument::fromJson(message.payload());
+	if (doc.isObject()) handleSignalingMessage(doc.object());
 }
 
-void P2PClient::SendSignalingMessage(const QJsonObject &message) {
+void P2PClient::sendSignalingMessage(const QJsonObject &message) {
 	if (m_targetId.isEmpty()) {
 		qWarning() << "Cannot send signaling message: Target ID is empty!";
 		return;
@@ -62,7 +57,7 @@ void P2PClient::SendSignalingMessage(const QJsonObject &message) {
 	});
 }
 
-void P2PClient::SetupWebRTC() {
+void P2PClient::setupWebRTC() {
 	qInfo() << "Initializing WebRTC PeerConnection...";
 	emit connectionStateChanged(2, "Initializing WebRTC PeerConnection...");
 	Configuration config;
@@ -80,19 +75,19 @@ void P2PClient::SetupWebRTC() {
 	m_peerConnection->onLocalDescription([this](Description description) {
 		qInfo() << "Generated Local SDP Description. Type: " << QString::fromStdString(description.typeString());
 		qDebug() << "Local SDP Payload:\n" << QString::fromStdString(std::string(description));
-		QJsonObject msg;
-		msg["type"] = QString::fromStdString(description.typeString());
-		msg["sdp"] = QString::fromStdString(std::string(description));
-		SendSignalingMessage(msg);
+		sendSignalingMessage({
+			{"type", QString::fromStdString(description.typeString())},
+			{"sdp", QString::fromStdString(std::string(description))}
+		});
 	});
 
 	m_peerConnection->onLocalCandidate([this](Candidate candidate) {
 		qDebug() << "Got local ICE candidate:" << QString::fromStdString(std::string(candidate));
-		QJsonObject msg;
-		msg["type"] = "candidate";
-		msg["candidate"] = QString::fromStdString(std::string(candidate));
-		msg["mid"] = QString::fromStdString(candidate.mid());
-		SendSignalingMessage(msg);
+		sendSignalingMessage({
+			{"type", "candidate"},
+			{"candidate", QString::fromStdString(std::string(candidate))},
+			{"mid", QString::fromStdString(candidate.mid())}
+		});
 	});
 
 	m_peerConnection->onStateChange([this, pc = m_peerConnection.get()](PeerConnection::State state) {
@@ -102,16 +97,16 @@ void P2PClient::SetupWebRTC() {
 			}
 			QString stateStr;
 			switch(state) {
-				case PeerConnection::State::New:					stateStr = "New";					 break;
+				case PeerConnection::State::New:			stateStr = "New";			break;
 				case PeerConnection::State::Connecting:
 					stateStr = "Connecting";
 					emit connectionStateChanged(4, "Establishing P2P connection...");
 					break;
-				case PeerConnection::State::Connected:		stateStr = "Connected";    break;
-				case PeerConnection::State::Disconnected: stateStr = "Disconnected"; break;
-				case PeerConnection::State::Failed:				stateStr = "Failed";			 break;
-				case PeerConnection::State::Closed:				stateStr = "Closed";			 break;
-				default:																	stateStr = "Unknown";			 break;
+				case PeerConnection::State::Connected:		stateStr = "Connected";		break;
+				case PeerConnection::State::Disconnected:	stateStr = "Disconnected";	break;
+				case PeerConnection::State::Failed:			stateStr = "Failed";		break;
+				case PeerConnection::State::Closed:			stateStr = "Closed";		break;
+				default:									stateStr = "Unknown";		break;
 			}
 			qInfo() << "PeerConnection state changed to" << stateStr;
 
@@ -142,7 +137,7 @@ void P2PClient::handleSignalingMessage(const QJsonObject &msg) {
 
 		closeConnection();
 		m_targetId = msg["from"].toString();
-		SetupWebRTC();
+		setupWebRTC();
 
 		std::string sdp = msg["sdp"].toString().toStdString();
 		qDebug() << "Received remote offer SDP:\n" << QString::fromStdString(sdp);
@@ -167,8 +162,7 @@ void P2PClient::handleSignalingMessage(const QJsonObject &msg) {
 		} catch (const std::exception& e) {
 			qWarning() << "Ignoring ICE candidate, remote description not ready yet:" << e.what();
 		}
-	}
-	else {
+	} else {
 		qWarning() << "Unknown signaling message type received:" << type;
 	}
 }
@@ -183,26 +177,20 @@ void P2PClient::wireDataChannel() {
 	});
 
 	m_dataChannel->onClosed([this]() {
-		QMetaObject::invokeMethod(this, [this]() {
-			qWarning() << "WebRTC DataChannel closed!";
-		});
+		qWarning() << "WebRTC DataChannel closed!";
 	});
 
 	m_dataChannel->onMessage([this](std::variant<binary, std::string> message) {
-		if (std::holds_alternative<std::string>(message)) {
-			QString text = QString::fromStdString(std::get<std::string>(message));
-			qDebug() << "Received JSON command over DataChannel. Length:" << text.length();
-
-			QMetaObject::invokeMethod(this, [this, text]() {
-				QJsonDocument doc = QJsonDocument::fromJson(text.toUtf8());
-				if (!doc.isNull() && doc.isObject()) {
-					emit jsonReceived(doc.object());
-				}
+		if (auto* text = std::get_if<std::string>(&message)) {
+			QString json = QString::fromStdString(*text);
+			qDebug() << "Received JSON command over DataChannel. Length:" << json.length();
+			QMetaObject::invokeMethod(this, [this, json]() {
+				auto doc = QJsonDocument::fromJson(json.toUtf8());
+				if (doc.isObject()) emit jsonReceived(doc.object());
 			});
-
-		} else if (std::holds_alternative<binary>(message)) {
-			auto binChunk = std::get<binary>(message);
-			QByteArray chunk(reinterpret_cast<const char *>(binChunk.data()), binChunk.size());
+		} else {
+			auto& bin = std::get<binary>(message);
+			QByteArray chunk(reinterpret_cast<const char *>(bin.data()), bin.size());
 			QMetaObject::invokeMethod(this, [this, chunk]() {
 				emit binaryReceived(chunk);
 			});
@@ -220,7 +208,7 @@ void P2PClient::call(const QString &targetId) {
 	emit connectionStateChanged(1, "Connecting to target...");
 	closeConnection();
 	m_targetId = targetId;
-	SetupWebRTC();
+	setupWebRTC();
 	m_dataChannel = m_peerConnection->createDataChannel("");
 	wireDataChannel();
 	m_peerConnection->setLocalDescription();
@@ -230,8 +218,7 @@ void P2PClient::sendJson(const QJsonObject &json) {
 	if (m_dataChannel && m_dataChannel->isOpen()) {
 		qDebug() << "Sending JSON over DataChannel:" << json["action"].toString() << json["file_name"].toString();
 		m_dataChannel->send(QJsonDocument(json).toJson(QJsonDocument::Compact).toStdString());
-	}
-	else {
+	} else {
 		qWarning() << "Failed to send JSON: DataChannel is not open!";
 	}
 }

@@ -3,9 +3,6 @@
 
 #include <QObject>
 #include <QJsonObject>
-#include <QJsonDocument>
-#include <QByteArray>
-#include <QString>
 
 #include <qmqtt.h>
 #include <rtc/rtc.hpp>
@@ -48,10 +45,10 @@ private:
 	std::shared_ptr<rtc::PeerConnection> m_peerConnection;
 	std::shared_ptr<rtc::DataChannel> m_dataChannel;
 
-	void SetupMQTT();
-	void SetupWebRTC();
+	void setupMQTT();
+	void setupWebRTC();
 	void wireDataChannel();
-	void SendSignalingMessage(const QJsonObject& message);
+	void sendSignalingMessage(const QJsonObject& message);
 	void handleSignalingMessage(const QJsonObject& message);
 };
 

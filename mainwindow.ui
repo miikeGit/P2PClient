@@ -6,8 +6,8 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>258</width>
-    <height>440</height>
+    <width>601</width>
+    <height>504</height>
    </rect>
   </property>
   <property name="windowTitle">
@@ -145,6 +145,14 @@
           <bool>true</bool>
          </property>
          <widget class="QWidget" name="transfersContainer">
+          <property name="geometry">
+           <rect>
+            <x>0</x>
+            <y>0</y>
+            <width>535</width>
+            <height>170</height>
+           </rect>
+          </property>
           <layout class="QVBoxLayout" name="verticalLayout_transfers">
            <property name="spacing">
             <number>10</number>
@@ -213,19 +221,6 @@
        </item>
       </layout>
      </widget>
-    </item>
-    <item>
-     <spacer name="verticalSpacer">
-      <property name="orientation">
-       <enum>Qt::Orientation::Vertical</enum>
-      </property>
-      <property name="sizeHint" stdset="0">
-       <size>
-        <width>20</width>
-        <height>40</height>
-       </size>
-      </property>
-     </spacer>
     </item>
    </layout>
   </widget>

@@ -37,6 +37,9 @@ public slots:
 	void onPeerDisconnected();
 	void setSpeedLimit(int kbps);
 
+private slots:
+	void sendNextChunk();
+
 private:
 	QString m_expectedHash;
 	QString m_downloadPath;
@@ -44,7 +47,7 @@ private:
 	static constexpr qint64 CHUNK_SIZE = 16384;
 
 	QFile m_file;
-	QTimer *m_fileSenderTimer = nullptr;
+	QTimer m_fileSenderTimer;
 	QElapsedTimer m_transferSpeedTimer;
 
 	qint64 m_expectedFileSize = 0;
@@ -58,6 +61,7 @@ private:
 
 	void cleanup();
 	void applyPauseState();
+	void updateSpeedStats(qint64 currentBytes);
 	QString calculateSha256();
 };
 

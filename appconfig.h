@@ -3,7 +3,6 @@
 
 #include <QString>
 #include <QList>
-#include <QJsonArray>
 
 struct MqttConfig {
 		QString host;

@@ -2,7 +2,6 @@
 #define MAINWINDOW_H
 
 #include <QMainWindow>
-#include <QApplication>
 #include <memory>
 #include "p2pclient.h"
 #include "filetransfermanager.h"
@@ -10,12 +9,14 @@
 #include <QLabel>
 #include <QProgressBar>
 #include <QPushButton>
+#include <QApplication>
 
 QT_BEGIN_NAMESPACE
 namespace Ui { class MainWindow; }
 QT_END_NAMESPACE
 
-struct TransferUI {
+struct TransferSession {
+	FileTransferManager* manager;
 	QWidget* container;
 	QLabel* nameLabel;
 	QProgressBar* progressBar;
@@ -40,8 +41,7 @@ private:
 	std::unique_ptr<Ui::MainWindow> ui;
 	P2PClient* m_p2pClient = nullptr;
 	
-	QMap<int, FileTransferManager*> m_transfers;
-	QMap<int, TransferUI> m_transferUIs;
+	QMap<int, TransferSession> m_transfers;
 	int m_nextTransferId = 1;
 
 	QString m_configPath = qApp->applicationDirPath() + "/config.json";
