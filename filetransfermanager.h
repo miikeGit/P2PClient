@@ -17,6 +17,7 @@ public:
 
 	void sendFile(const QString &filePath);
 	void cancelTransfer();
+	void togglePause();
 	void setDownloadPath(const QString &path) { m_downloadPath = path; }
 
 signals:
@@ -27,6 +28,7 @@ signals:
 	void speedUpdated(double mbps, int eta);
 	void transferFinished();
 	void transferCanceled();
+	void transferPaused(bool paused);
 	void hashProgressUpdated(qint64 current, qint64 total);
 
 public slots:
@@ -52,8 +54,10 @@ private:
 
 	bool m_isSending = false;
 	bool m_cancelTransfer = false;
+	bool m_isPaused = false;
 
 	void cleanup();
+	void applyPauseState();
 	QString calculateSha256();
 };
 

@@ -77,10 +77,13 @@ FileTransferManager* MainWindow::createTransferManager(int id) {
 
 	QHBoxLayout* hLayout = new QHBoxLayout();
 	QLabel* statusLabel = new QLabel(transferWidget);
+	QPushButton* pauseButton = new QPushButton("Pause", transferWidget);
+	pauseButton->setEnabled(false);
 	QPushButton* cancelButton = new QPushButton("Cancel", transferWidget);
 	
 	hLayout->addWidget(statusLabel);
 	hLayout->addStretch();
+	hLayout->addWidget(pauseButton);
 	hLayout->addWidget(cancelButton);
 	layout->addLayout(hLayout);
 
@@ -96,9 +99,11 @@ FileTransferManager* MainWindow::createTransferManager(int id) {
 	tUi.nameLabel = nameLabel;
 	tUi.progressBar = progressBar;
 	tUi.statusLabel = statusLabel;
+	tUi.pauseButton = pauseButton;
 	tUi.cancelButton = cancelButton;
 	m_transferUIs[id] = tUi;
 
+	connect(pauseButton, &QPushButton::clicked, manager, &FileTransferManager::togglePause);
 	connect(cancelButton, &QPushButton::clicked, manager, &FileTransferManager::cancelTransfer);
 
 	connect(manager, &FileTransferManager::sendBinaryData, this, [this, id](const QByteArray& data) {
@@ -119,6 +124,8 @@ FileTransferManager* MainWindow::createTransferManager(int id) {
 		tUi.nameLabel->setText(name);
 		tUi.progressBar->setMaximum(100);
 		tUi.progressBar->setValue(0);
+		tUi.pauseButton->setEnabled(true);
+		tUi.pauseButton->setText("Pause");
 		tUi.cancelButton->setEnabled(true);
 		ui->selectDownloadPathButton->setEnabled(false);
 	});
@@ -132,6 +139,14 @@ FileTransferManager* MainWindow::createTransferManager(int id) {
 	connect(manager, &FileTransferManager::speedUpdated, this, [this, id](double mbps, int eta) {
 		if (!m_transferUIs.contains(id)) return;
 		m_transferUIs[id].statusLabel->setText(QString("Bandwidth: %1 MB/s | ETA: %2 seconds").arg(mbps, 0, 'f', 2).arg(eta));
+	});
+
+	connect(manager, &FileTransferManager::transferPaused, this, [this, id](bool paused) {
+		if (!m_transferUIs.contains(id)) return;
+		m_transferUIs[id].pauseButton->setText(paused ? "Resume" : "Pause");
+		if (paused) {
+			m_transferUIs[id].statusLabel->setText("Paused");
+		}
 	});
 
 	connect(manager, &FileTransferManager::transferFinished, this, [this, id]() {

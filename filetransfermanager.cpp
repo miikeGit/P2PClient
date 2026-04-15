@@ -19,6 +19,7 @@ void FileTransferManager::cleanup() {
 	}
 	if (m_file.isOpen()) m_file.close();
 	m_isSending = false;
+	m_isPaused = false;
 }
 
 void FileTransferManager::sendFile(const QString &filePath) {
@@ -155,6 +156,14 @@ void FileTransferManager::handleJsonCommand(const QJsonObject &json) {
 			if (action == "cancel_transfer" || action == "receiver_canceled") {
 				cleanup();
 				emit transferCanceled();
+			} else if (action == "pause_transfer") {
+				m_isPaused = true;
+				applyPauseState();
+				emit transferPaused(true);
+			} else if (action == "resume_transfer") {
+				m_isPaused = false;
+				applyPauseState();
+				emit transferPaused(false);
 			}
 		}
 	}
@@ -268,6 +277,33 @@ void FileTransferManager::setSpeedLimit(int kbps) {
 			m_fileSenderTimer->setInterval(qMax(1, delayMs));
 		} else {
 			m_fileSenderTimer->setInterval(0); // no limit
+		}
+	}
+}
+
+void FileTransferManager::togglePause() {
+	m_isPaused = !m_isPaused;
+	QJsonObject msg;
+	msg["action"] = m_isPaused ? "pause_transfer" : "resume_transfer";
+	emit sendJsonCommand(msg);
+
+	applyPauseState();
+	emit transferPaused(m_isPaused);
+}
+
+void FileTransferManager::applyPauseState() {
+	if (m_isSending && m_fileSenderTimer) {
+		if (m_isPaused) {
+			m_fileSenderTimer->stop();
+		} else {
+			m_transferSpeedTimer.restart();
+			m_lastSpeedCheckBytes = m_file.pos();
+			m_fileSenderTimer->start();
+		}
+	} else if (!m_isSending) {
+		if (!m_isPaused) {
+			m_transferSpeedTimer.restart();
+			m_lastSpeedCheckBytes = m_receivedBytes;
 		}
 	}
 }

@@ -20,6 +20,7 @@ struct TransferUI {
 	QLabel* nameLabel;
 	QProgressBar* progressBar;
 	QLabel* statusLabel;
+	QPushButton* pauseButton;
 	QPushButton* cancelButton;
 };
 
