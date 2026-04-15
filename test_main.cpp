@@ -141,8 +141,9 @@ private slots:
 		QVERIFY2(clientBCanceledSpy.wait(5000), "Cancel signal timeout");
 
 		QString downloadedFilePath = QStandardPaths::writableLocation(QStandardPaths::DownloadLocation) + "/" + testFileName;
-		QVERIFY2(!QFile::exists(downloadedFilePath), "file was not deleted");
+		QVERIFY2(QFile::exists(downloadedFilePath), "file was deleted, but should have been kept for resume!");
 
+		QFile::remove(downloadedFilePath);
 		QFile::remove(testFileName);
 	}
 
@@ -236,8 +237,9 @@ private slots:
 		QVERIFY2(clientBCanceledSpy.count() > 0 || clientBCanceledSpy.wait(5000), "Resources not cleaned up after disconnect");
 
 		QString downloadedPath = QStandardPaths::writableLocation(QStandardPaths::DownloadLocation) + "/" + testFileName;
-		QVERIFY2(!QFile::exists(downloadedPath), "Corrupted file remained on disk");
+		QVERIFY2(QFile::exists(downloadedPath), "Incomplete file was deleted, but must be kept for resuming");
 
+		QFile::remove(downloadedPath);
 		QFile::remove(testFileName);
 	}
 

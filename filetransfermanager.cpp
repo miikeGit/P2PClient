@@ -84,7 +84,6 @@ void FileTransferManager::sendFile(const QString &filePath) {
 		}
 	});
 	setSpeedLimit(m_speedLimitKbps);
-	m_fileSenderTimer->start();
 }
 
 void FileTransferManager::handleJsonCommand(const QJsonObject &json) {
@@ -102,11 +101,33 @@ void FileTransferManager::handleJsonCommand(const QJsonObject &json) {
 		QString savePath = m_downloadPath + "/" + json["file_name"].toString();
 		m_file.setFileName(savePath);
 
-		if (m_file.open(QIODevice::WriteOnly)) {
-			qDebug() << "Successfully created local file for downloading at:" << savePath;
+		qint64 existingSize = 0;
+		QFileInfo fi(savePath);
+		if (fi.exists()) {
+			if (fi.size() <= m_expectedFileSize) {
+				existingSize = fi.size();
+				qInfo() << "Found existing file, size:" << existingSize << "bytes. Resuming...";
+			} else {
+				QFile::remove(savePath);
+			}
+		}
+
+		if (m_file.open(QIODevice::Append)) {
+			m_receivedBytes = existingSize;
+			qDebug() << "Successfully opened local file for downloading at:" << savePath;
 			emit transferStarted(json["file_name"].toString());
-			m_lastSpeedCheckBytes = 0;
+			emit progressUpdated(m_receivedBytes, m_expectedFileSize);
+			m_lastSpeedCheckBytes = m_receivedBytes;
 			m_transferSpeedTimer.start();
+
+			QJsonObject reply;
+			reply["action"] = "accept_transfer";
+			reply["resume_offset"] = existingSize;
+			emit sendJsonCommand(reply);
+
+			if (m_receivedBytes >= m_expectedFileSize) {
+				handleBinaryChunk(QByteArray()); 
+			}
 		}
 		else {
 			qCritical() << "Failed to create local file for downloading at:" << savePath;
@@ -114,14 +135,27 @@ void FileTransferManager::handleJsonCommand(const QJsonObject &json) {
 	}
 	else if (json.contains("action")) {
 		QString action = json["action"].toString();
-		qWarning() << "Received action command from peer:" << action;
-		if (action == "cancel_transfer" || action == "receiver_canceled") {
-			if (!m_isSending && m_file.isOpen()) {
-				qDebug() << "Deleting incomplete downloaded file";
-				m_file.remove();
+		
+		if (action == "accept_transfer") {
+			if (m_isSending && m_fileSenderTimer) {
+				qint64 offset = json["resume_offset"].toVariant().toLongLong();
+				if (offset >= 0 && offset <= m_expectedFileSize) {
+					m_file.seek(offset);
+					qInfo() << "Resuming transfer from offset:" << offset;
+					emit progressUpdated(offset, m_expectedFileSize);
+					m_lastSpeedCheckBytes = offset;
+				}
+				m_transferSpeedTimer.start();
+				setSpeedLimit(m_speedLimitKbps);
+				m_fileSenderTimer->start();
 			}
-			cleanup();
-			emit transferCanceled();
+		}
+		else {
+			qWarning() << "Received action command from peer:" << action;
+			if (action == "cancel_transfer" || action == "receiver_canceled") {
+				cleanup();
+				emit transferCanceled();
+			}
 		}
 	}
 }
@@ -191,9 +225,8 @@ void FileTransferManager::cancelTransfer() {
 		emit transferCanceled();
 	}
 	else if (m_file.isOpen()) {
-		if (m_file.openMode() & QIODevice::WriteOnly) {
+		if (m_file.openMode() & (QIODevice::WriteOnly | QIODevice::Append)) {
 			cancelMsg["action"] = "receiver_canceled";
-			m_file.remove();
 		} else {
 			cancelMsg["action"] = "cancel_transfer";
 		}
@@ -205,7 +238,6 @@ void FileTransferManager::cancelTransfer() {
 
 void FileTransferManager::onPeerDisconnected() {
 	qWarning() << "Peer disconnected. Aborting active file transfers";
-	if (m_file.isOpen() && !m_isSending) m_file.remove();
 	cleanup();
 	emit transferCanceled();
 }

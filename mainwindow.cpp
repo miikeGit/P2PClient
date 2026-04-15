@@ -18,23 +18,14 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), m_appConfig(AppCo
 
 	connect(m_p2pClient, &P2PClient::binaryReceived, this, [this](const QByteArray& data) {
 		if (data.size() < 4) return;
-		qint32 idBig;
-		memcpy(&idBig, data.constData(), 4);
-		int id = qFromBigEndian(idBig);
-		QByteArray chunk = data.mid(4);
-		if (m_transfers.contains(id)) {
-			m_transfers[id]->handleBinaryChunk(chunk);
-		}
+    int id = *reinterpret_cast<const int*>(data.constData());
+    if (m_transfers.contains(id)) m_transfers[id]->handleBinaryChunk(data.mid(4));
 	});
 
 	connect(m_p2pClient, &P2PClient::jsonReceived, this, [this](const QJsonObject& json) {
 		int id = json["transfer_id"].toInt();
-		if (!m_transfers.contains(id)) {
-			createTransferManager(id);
-		}
-		if (m_transfers.contains(id)) {
-			m_transfers[id]->handleJsonCommand(json);
-		}
+		if (!m_transfers.contains(id)) createTransferManager(id);
+		if (m_transfers.contains(id)) m_transfers[id]->handleJsonCommand(json);
 	});
 
 	connect(m_p2pClient, &P2PClient::connectionEstablished, this, [this]() {
@@ -112,10 +103,9 @@ FileTransferManager* MainWindow::createTransferManager(int id) {
 
 	connect(manager, &FileTransferManager::sendBinaryData, this, [this, id](const QByteArray& data) {
 		QByteArray pkt;
-		qint32 idBig = qToBigEndian((qint32)id);
-		pkt.append(reinterpret_cast<const char*>(&idBig), 4);
-		pkt.append(data);
-		m_p2pClient->sendBinary(pkt);
+    pkt.append(reinterpret_cast<const char*>(&id), sizeof(id)); 
+    pkt.append(data);
+    m_p2pClient->sendBinary(pkt);
 	});
 
 	connect(manager, &FileTransferManager::sendJsonCommand, this, [this, id](QJsonObject json) {

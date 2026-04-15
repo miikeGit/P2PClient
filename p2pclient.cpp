@@ -95,8 +95,11 @@ void P2PClient::SetupWebRTC() {
 		SendSignalingMessage(msg);
 	});
 
-	m_peerConnection->onStateChange([this](PeerConnection::State state) {
-		QMetaObject::invokeMethod(this, [this, state]() {
+	m_peerConnection->onStateChange([this, pc = m_peerConnection.get()](PeerConnection::State state) {
+		QMetaObject::invokeMethod(this, [this, state, pc]() {
+			if (m_peerConnection.get() != pc) {
+				return;
+			}
 			QString stateStr;
 			switch(state) {
 				case PeerConnection::State::New:					stateStr = "New";					 break;
@@ -134,21 +137,20 @@ void P2PClient::handleSignalingMessage(const QJsonObject &msg) {
 	QString type = msg["type"].toString();
 	qInfo() << "Got incoming message of type -" << type;
 
-	if (!m_peerConnection) {
-		qDebug() << "PeerConnection not initialized yet. Setting up WebRTC...";
-		SetupWebRTC();
-	}
-
 	if (type == "offer") {
 		emit connectionStateChanged(3, "Incoming connection...");
 
+		closeConnection();
 		m_targetId = msg["from"].toString();
+		SetupWebRTC();
+
 		std::string sdp = msg["sdp"].toString().toStdString();
 		qDebug() << "Received remote offer SDP:\n" << QString::fromStdString(sdp);
 
 		m_peerConnection->setRemoteDescription(Description(sdp, type.toStdString()));
 		m_peerConnection->setLocalDescription();
 	} else if (type == "answer") {
+		if (!m_peerConnection) return;
 		std::string sdp = msg["sdp"].toString().toStdString();
 		qDebug() << "Received remote answer SDP:\n" << QString::fromStdString(sdp);
 
@@ -244,6 +246,12 @@ void P2PClient::sendBinary(const QByteArray& data) {
 
 void P2PClient::closeConnection() {
 	qInfo() << "Closing WebRTC connection and DataChannel...";
-	if (m_dataChannel)		m_dataChannel->close();
-	if (m_peerConnection) m_peerConnection->close();
+	if (m_dataChannel) {
+		m_dataChannel->close();
+		m_dataChannel.reset();
+	}
+	if (m_peerConnection) {
+		m_peerConnection->close();
+		m_peerConnection.reset();
+	}
 }
