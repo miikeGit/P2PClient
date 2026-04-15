@@ -12,6 +12,33 @@
 class P2PTests : public QObject {
 	Q_OBJECT
 
+private:
+	void wireUp(P2PClient& client, FileTransferManager& fm, int transferId) {
+		connect(&fm, &FileTransferManager::sendBinaryData, &client, [&client, transferId](const QByteArray& data) {
+			QByteArray pkt;
+			pkt.append(reinterpret_cast<const char*>(&transferId), sizeof(transferId));
+			pkt.append(data);
+			client.sendBinary(pkt);
+		});
+		connect(&fm, &FileTransferManager::sendJsonCommand, &client, [&client, transferId](QJsonObject json) {
+			json["transfer_id"] = transferId;
+			client.sendJson(json);
+		});
+		connect(&client, &P2PClient::binaryReceived, &fm, [&fm, transferId](const QByteArray& data) {
+			if (data.size() < 4) return;
+			int id = *reinterpret_cast<const int*>(data.constData());
+			if (id == transferId) {
+				fm.handleBinaryChunk(data.mid(4));
+			}
+		});
+		connect(&client, &P2PClient::jsonReceived, &fm, [&fm, transferId](const QJsonObject& json) {
+			int id = json["transfer_id"].toInt();
+			if (id == transferId) {
+				fm.handleJsonCommand(json);
+			}
+		});
+	}
+
 private slots:
 
 	QString calculateTestHash(const QString &filePath) {
@@ -32,17 +59,13 @@ private slots:
 
 		P2PClient clientA(config);
 		FileTransferManager clientAFM;
-		connect(&clientAFM, &FileTransferManager::sendBinaryData, &clientA, &P2PClient::sendBinary);
-		connect(&clientAFM, &FileTransferManager::sendJsonCommand, &clientA, &P2PClient::sendJson);
-		connect(&clientA, &P2PClient::binaryReceived, &clientAFM, &FileTransferManager::handleBinaryChunk);
-		connect(&clientA, &P2PClient::jsonReceived, &clientAFM, &FileTransferManager::handleJsonCommand);
+		clientAFM.setDownloadPath(QStandardPaths::writableLocation(QStandardPaths::DownloadLocation));
+		wireUp(clientA, clientAFM, 1);
 
 		P2PClient clientB(config);
 		FileTransferManager clientBFM;
-		connect(&clientBFM, &FileTransferManager::sendBinaryData, &clientB, &P2PClient::sendBinary);
-		connect(&clientBFM, &FileTransferManager::sendJsonCommand, &clientB, &P2PClient::sendJson);
-		connect(&clientB, &P2PClient::binaryReceived, &clientBFM, &FileTransferManager::handleBinaryChunk);
-		connect(&clientB, &P2PClient::jsonReceived, &clientBFM, &FileTransferManager::handleJsonCommand);
+		clientBFM.setDownloadPath(QStandardPaths::writableLocation(QStandardPaths::DownloadLocation));
+		wireUp(clientB, clientBFM, 1);
 
 		QSignalSpy clientAMqttSpy(&clientA, &P2PClient::brokerConnected);
 		QSignalSpy clientBMqttSpy(&clientB, &P2PClient::brokerConnected);
@@ -86,11 +109,11 @@ private slots:
 		AppConfig config = AppConfig::load("config.json");
 		P2PClient clientA(config); FileTransferManager clientAFM;
 		P2PClient clientB(config); FileTransferManager clientBFM;
+		clientAFM.setDownloadPath(QStandardPaths::writableLocation(QStandardPaths::DownloadLocation));
+		clientBFM.setDownloadPath(QStandardPaths::writableLocation(QStandardPaths::DownloadLocation));
 
-		connect(&clientAFM, &FileTransferManager::sendBinaryData, &clientA, &P2PClient::sendBinary);
-		connect(&clientAFM, &FileTransferManager::sendJsonCommand, &clientA, &P2PClient::sendJson);
-		connect(&clientB, &P2PClient::binaryReceived, &clientBFM, &FileTransferManager::handleBinaryChunk);
-		connect(&clientB, &P2PClient::jsonReceived, &clientBFM, &FileTransferManager::handleJsonCommand);
+		wireUp(clientA, clientAFM, 1);
+		wireUp(clientB, clientBFM, 1);
 
 		clientA.connectToBroker(); clientB.connectToBroker();
 		QSignalSpy clientAMqttSpy(&clientA, &P2PClient::brokerConnected);
@@ -132,11 +155,11 @@ private slots:
 		AppConfig config = AppConfig::load("config.json");
 		P2PClient clientA(config); FileTransferManager clientAFM;
 		P2PClient clientB(config); FileTransferManager clientBFM;
+		clientAFM.setDownloadPath(QStandardPaths::writableLocation(QStandardPaths::DownloadLocation));
+		clientBFM.setDownloadPath(QStandardPaths::writableLocation(QStandardPaths::DownloadLocation));
 
-		connect(&clientAFM, &FileTransferManager::sendBinaryData, &clientA, &P2PClient::sendBinary);
-		connect(&clientAFM, &FileTransferManager::sendJsonCommand, &clientA, &P2PClient::sendJson);
-		connect(&clientB, &P2PClient::binaryReceived, &clientBFM, &FileTransferManager::handleBinaryChunk);
-		connect(&clientB, &P2PClient::jsonReceived, &clientBFM, &FileTransferManager::handleJsonCommand);
+		wireUp(clientA, clientAFM, 1);
+		wireUp(clientB, clientBFM, 1);
 
 		clientA.connectToBroker(); clientB.connectToBroker();
 		QSignalSpy clientAMqttSpy(&clientA, &P2PClient::brokerConnected); clientAMqttSpy.wait(5000);
@@ -174,9 +197,13 @@ private slots:
 		AppConfig config = AppConfig::load("config.json");
 		P2PClient clientA(config); FileTransferManager clientAFM;
 		P2PClient clientB(config); FileTransferManager clientBFM;
+		clientAFM.setDownloadPath(QStandardPaths::writableLocation(QStandardPaths::DownloadLocation));
+		clientBFM.setDownloadPath(QStandardPaths::writableLocation(QStandardPaths::DownloadLocation));
 
 		connect(&clientA, &P2PClient::connectionClosed, &clientAFM, &FileTransferManager::onPeerDisconnected);
 		connect(&clientB, &P2PClient::connectionClosed, &clientBFM, &FileTransferManager::onPeerDisconnected);
+		wireUp(clientA, clientAFM, 1);
+		wireUp(clientB, clientBFM, 1);
 
 		clientA.connectToBroker(); clientB.connectToBroker();
 		QSignalSpy aMqtt(&clientA, &P2PClient::brokerConnected);
@@ -218,16 +245,11 @@ private slots:
 		AppConfig config = AppConfig::load("config.json");
 		P2PClient clientA(config); FileTransferManager clientAFM;
 		P2PClient clientB(config); FileTransferManager clientBFM;
+		clientAFM.setDownloadPath(QStandardPaths::writableLocation(QStandardPaths::DownloadLocation));
+		clientBFM.setDownloadPath(QStandardPaths::writableLocation(QStandardPaths::DownloadLocation));
 
-		connect(&clientAFM, &FileTransferManager::sendBinaryData, &clientA, &P2PClient::sendBinary);
-		connect(&clientAFM, &FileTransferManager::sendJsonCommand, &clientA, &P2PClient::sendJson);
-		connect(&clientA, &P2PClient::binaryReceived, &clientAFM, &FileTransferManager::handleBinaryChunk);
-		connect(&clientA, &P2PClient::jsonReceived, &clientAFM, &FileTransferManager::handleJsonCommand);
-
-		connect(&clientBFM, &FileTransferManager::sendBinaryData, &clientB, &P2PClient::sendBinary);
-		connect(&clientBFM, &FileTransferManager::sendJsonCommand, &clientB, &P2PClient::sendJson);
-		connect(&clientB, &P2PClient::binaryReceived, &clientBFM, &FileTransferManager::handleBinaryChunk);
-		connect(&clientB, &P2PClient::jsonReceived, &clientBFM, &FileTransferManager::handleJsonCommand);
+		wireUp(clientA, clientAFM, 1);
+		wireUp(clientB, clientBFM, 1);
 
 		clientA.connectToBroker(); clientB.connectToBroker();
 		QSignalSpy aMqtt(&clientA, &P2PClient::brokerConnected);
@@ -248,11 +270,17 @@ private slots:
 		maliciousMeta["file_name"] = "integrity_test.txt";
 		maliciousMeta["file_size"] = (qint64)realData.size();
 		maliciousMeta["file_hash"] = "fake_hash_123456789";
+		maliciousMeta["transfer_id"] = 1;
 
 		clientA.sendJson(maliciousMeta);
 
 		QThread::msleep(100);
-		clientA.sendBinary(realData);
+
+		QByteArray pkt;
+		int transferId = 1;
+		pkt.append(reinterpret_cast<const char*>(&transferId), sizeof(transferId));
+		pkt.append(realData);
+		clientA.sendBinary(pkt);
 
 		QSignalSpy clientBCanceledSpy(&clientBFM, &FileTransferManager::transferCanceled);
 		QSignalSpy clientBFinishedSpy(&clientBFM, &FileTransferManager::transferFinished);

@@ -160,7 +160,11 @@ void P2PClient::handleSignalingMessage(const QJsonObject &msg) {
 		std::string mid = msg["mid"].toString().toStdString();
 		qDebug() << "Received remote ICE candidate:" << QString::fromStdString(sdp);
 
-		m_peerConnection->addRemoteCandidate(Candidate(sdp, mid));
+		try {
+			m_peerConnection->addRemoteCandidate(Candidate(sdp, mid));
+		} catch (const std::exception& e) {
+			qWarning() << "Ignoring ICE candidate, remote description not ready yet:" << e.what();
+		}
 	}
 	else {
 		qWarning() << "Unknown signaling message type received:" << type;
