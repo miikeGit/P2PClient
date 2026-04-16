@@ -122,8 +122,13 @@ void P2PClient::setupWebRTC() {
 	m_peerConnection->onDataChannel([this](std::shared_ptr<DataChannel> dataChannel) {
 		qInfo() << "Remote peer created a DataChannel. Wiring it up...";
 		QMetaObject::invokeMethod(this, [this, dataChannel]() {
-			m_dataChannel = dataChannel;
-			wireDataChannel();
+			if (dataChannel->label() == "control") {
+				m_controlChannel = dataChannel;
+				wireDataChannel(m_controlChannel);
+			} else if (dataChannel->label() == "binary") {
+				m_binaryChannel = dataChannel;
+				wireDataChannel(m_binaryChannel);
+			}
 		});
 	});
 }
@@ -167,42 +172,60 @@ void P2PClient::handleSignalingMessage(const QJsonObject &msg) {
 	}
 }
 
-void P2PClient::wireDataChannel() {
-	m_dataChannel->onBufferedAmountLow([this]() {
-		QMetaObject::invokeMethod(this, [this]() {
-			emit backpressureStateChanged(false);
-		});
-	});
+void P2PClient::checkConnectionReady() {
+	if (m_controlChannelOpen && m_binaryChannelOpen) {
+		qInfo() << "Both WebRTC DataChannels are open";
+		emit connectionStateChanged(5, "Connection established!");
+		emit connectionEstablished();
+	}
+}
 
-	m_dataChannel->onOpen([this]() {
-		QMetaObject::invokeMethod(this, [this]() {
-			qInfo() << "WebRTC DataChannel opened successfully!";
-			if (m_dataChannel) {
-				try { m_dataChannel->setBufferedAmountLowThreshold(2 * 1024 * 1024); } catch(...) {}
+void P2PClient::wireDataChannel(std::shared_ptr<rtc::DataChannel> channel) {
+	if (!channel) return;
+
+	if (channel->label() == "binary") {
+		channel->onBufferedAmountLow([this]() {
+			QMetaObject::invokeMethod(this, [this]() {
+				emit backpressureStateChanged(false);
+			});
+		});
+	}
+
+	channel->onOpen([this, channel]() {
+		QMetaObject::invokeMethod(this, [this, channel]() {
+			qInfo() << "WebRTC DataChannel opened successfully:" << QString::fromStdString(channel->label());
+			if (channel->label() == "binary") {
+				try { channel->setBufferedAmountLowThreshold(2 * 1024 * 1024); } catch(...) {}
+				m_binaryChannelOpen = true;
+			} else if (channel->label() == "control") {
+				m_controlChannelOpen = true;
 			}
-			emit connectionStateChanged(5, "Connection established!");
-			emit connectionEstablished();
+			checkConnectionReady();
 		});
 	});
 
-	m_dataChannel->onClosed([this]() {
-		qWarning() << "WebRTC DataChannel closed!";
+	channel->onClosed([this, channel]() {
+		qWarning() << "WebRTC DataChannel closed:" << QString::fromStdString(channel->label());
 	});
 
-	m_dataChannel->onMessage([this](std::variant<binary, std::string> message) {
+	channel->onMessage([this, channel](std::variant<binary, std::string> message) {
 		if (auto* text = std::get_if<std::string>(&message)) {
-			QString json = QString::fromStdString(*text);
-			qDebug() << "Received JSON command over DataChannel. Length:" << json.length();
-			QMetaObject::invokeMethod(this, [this, json]() {
-				auto doc = QJsonDocument::fromJson(json.toUtf8());
-				if (doc.isObject()) emit jsonReceived(doc.object());
-			});
+			if (channel->label() == "control") {
+				QString json = QString::fromStdString(*text);
+				qDebug() << "Received JSON command over Control Channel. Length:" << json.length();
+				QMetaObject::invokeMethod(this, [this, json]() {
+					auto doc = QJsonDocument::fromJson(json.toUtf8());
+					if (doc.isObject()) emit jsonReceived(doc.object());
+				});
+			}
 		} else {
-			auto& bin = std::get<binary>(message);
-			QByteArray chunk(reinterpret_cast<const char *>(bin.data()), bin.size());
-			QMetaObject::invokeMethod(this, [this, chunk]() {
-				emit binaryReceived(chunk);
-			});
+			if (channel->label() == "binary") {
+				auto& bin = std::get<binary>(message);
+				QByteArray chunk(reinterpret_cast<const char *>(bin.data()), bin.size());
+				QMetaObject::invokeMethod(this, [this, chunk]() {
+					emit binaryReceived(chunk);
+				});
+			}
 		}
 	});
 }
@@ -218,37 +241,46 @@ void P2PClient::call(const QString &targetId) {
 	closeConnection();
 	m_targetId = targetId;
 	setupWebRTC();
-	m_dataChannel = m_peerConnection->createDataChannel("");
-	wireDataChannel();
+	m_controlChannel = m_peerConnection->createDataChannel("control");
+	m_binaryChannel = m_peerConnection->createDataChannel("binary");
+	wireDataChannel(m_controlChannel);
+	wireDataChannel(m_binaryChannel);
 	m_peerConnection->setLocalDescription();
 }
 
 void P2PClient::sendJson(const QJsonObject &json) {
-	if (m_dataChannel && m_dataChannel->isOpen()) {
-		qDebug() << "Sending JSON over DataChannel:" << json["action"].toString() << json["file_name"].toString();
-		m_dataChannel->send(QJsonDocument(json).toJson(QJsonDocument::Compact).toStdString());
+	if (m_controlChannel && m_controlChannel->isOpen()) {
+		qDebug() << "Sending JSON over Control Channel:" << json["action"].toString() << json["file_name"].toString();
+		m_controlChannel->send(QJsonDocument(json).toJson(QJsonDocument::Compact).toStdString());
 	} else {
-		qWarning() << "Failed to send JSON: DataChannel is not open!";
+		qWarning() << "Failed to send JSON: Control Channel is not open!";
 	}
 }
 
 void P2PClient::sendBinary(const QByteArray& data) {
-	if (m_dataChannel && m_dataChannel->isOpen()) {
+	if (m_binaryChannel && m_binaryChannel->isOpen()) {
 		rtc::binary binChunk(reinterpret_cast<const std::byte*>(data.constData()),
 												 reinterpret_cast<const std::byte*>(data.constData()) + data.size());
-		m_dataChannel->send(binChunk);
-		if (m_dataChannel->bufferedAmount() > 16 * 1024 * 1024) {
+		m_binaryChannel->send(binChunk);
+		if (m_binaryChannel->bufferedAmount() > 16 * 1024 * 1024) {
 			emit backpressureStateChanged(true);
 		}
 	}
 }
 
 void P2PClient::closeConnection() {
-	qInfo() << "Closing WebRTC connection and DataChannel...";
-	if (m_dataChannel) {
-		m_dataChannel->close();
-		m_dataChannel.reset();
+	qInfo() << "Closing WebRTC connection and DataChannels...";
+	if (m_controlChannel) {
+		m_controlChannel->close();
+		m_controlChannel.reset();
 	}
+	if (m_binaryChannel) {
+		m_binaryChannel->close();
+		m_binaryChannel.reset();
+	}
+	m_controlChannelOpen = false;
+	m_binaryChannelOpen = false;
+
 	if (m_peerConnection) {
 		m_peerConnection->close();
 		m_peerConnection.reset();
@@ -256,8 +288,8 @@ void P2PClient::closeConnection() {
 }
 
 qint64 P2PClient::getBufferedAmount() const {
-	if (m_dataChannel && m_dataChannel->isOpen()) {
-		return static_cast<qint64>(m_dataChannel->bufferedAmount());
+	if (m_binaryChannel && m_binaryChannel->isOpen()) {
+		return static_cast<qint64>(m_binaryChannel->bufferedAmount());
 	}
 	return 0;
 }

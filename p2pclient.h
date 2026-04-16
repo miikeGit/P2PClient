@@ -45,11 +45,15 @@ private:
 
 	QMQTT::Client *m_mqttClient;
 	std::shared_ptr<rtc::PeerConnection> m_peerConnection;
-	std::shared_ptr<rtc::DataChannel> m_dataChannel;
+	std::shared_ptr<rtc::DataChannel> m_controlChannel;
+	std::shared_ptr<rtc::DataChannel> m_binaryChannel;
+	bool m_controlChannelOpen = false;
+	bool m_binaryChannelOpen = false;
 
 	void setupMQTT();
 	void setupWebRTC();
-	void wireDataChannel();
+	void wireDataChannel(std::shared_ptr<rtc::DataChannel> channel);
+	void checkConnectionReady();
 	void sendSignalingMessage(const QJsonObject& message);
 	void handleSignalingMessage(const QJsonObject& message);
 };
