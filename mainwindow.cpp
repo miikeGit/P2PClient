@@ -45,6 +45,10 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), m_appConfig(AppCo
 		ui->statusbar->showMessage(QString("Connection Step %1/%2: %3").arg(step).arg(maxSteps).arg(status), 5000);
 	});
 
+	connect(m_p2pClient, &P2PClient::backpressureStateChanged, this, [this](bool active) {
+		for (const auto& session : std::as_const(m_transfers)) session.manager->setBackpressure(active);
+	});
+
 	connect(ui->speedLimitSpinBox, QOverload<int>::of(&QSpinBox::valueChanged), this, &MainWindow::updateSpeedLimits);
 
 	m_p2pClient->connectToBroker();
@@ -147,6 +151,13 @@ FileTransferManager* MainWindow::createTransferManager(int id) {
 	connect(manager, &FileTransferManager::transferCanceled, this, [this, id]() {
 		qWarning() << "Transfer canceled ID:" << id;
 		cleanupTransfer(id);
+	});
+
+	manager->setNetworkBufferCallback([this]() -> qint64 {
+		if (m_p2pClient && !m_transfers.isEmpty()) {
+			return m_p2pClient->getBufferedAmount() / m_transfers.size();
+		}
+		return 0;
 	});
 
 	updateSpeedLimits();

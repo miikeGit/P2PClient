@@ -168,9 +168,18 @@ void P2PClient::handleSignalingMessage(const QJsonObject &msg) {
 }
 
 void P2PClient::wireDataChannel() {
+	m_dataChannel->onBufferedAmountLow([this]() {
+		QMetaObject::invokeMethod(this, [this]() {
+			emit backpressureStateChanged(false);
+		});
+	});
+
 	m_dataChannel->onOpen([this]() {
 		QMetaObject::invokeMethod(this, [this]() {
 			qInfo() << "WebRTC DataChannel opened successfully!";
+			if (m_dataChannel) {
+				try { m_dataChannel->setBufferedAmountLowThreshold(2 * 1024 * 1024); } catch(...) {}
+			}
 			emit connectionStateChanged(5, "Connection established!");
 			emit connectionEstablished();
 		});
@@ -228,6 +237,9 @@ void P2PClient::sendBinary(const QByteArray& data) {
 		rtc::binary binChunk(reinterpret_cast<const std::byte*>(data.constData()),
 												 reinterpret_cast<const std::byte*>(data.constData()) + data.size());
 		m_dataChannel->send(binChunk);
+		if (m_dataChannel->bufferedAmount() > 16 * 1024 * 1024) {
+			emit backpressureStateChanged(true);
+		}
 	}
 }
 
@@ -241,4 +253,11 @@ void P2PClient::closeConnection() {
 		m_peerConnection->close();
 		m_peerConnection.reset();
 	}
+}
+
+qint64 P2PClient::getBufferedAmount() const {
+	if (m_dataChannel && m_dataChannel->isOpen()) {
+		return static_cast<qint64>(m_dataChannel->bufferedAmount());
+	}
+	return 0;
 }

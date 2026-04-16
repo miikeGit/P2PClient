@@ -18,6 +18,7 @@ void FileTransferManager::cleanup() {
 	if (m_file.isOpen()) m_file.close();
 	m_isSending = false;
 	m_isPaused = false;
+	m_backpressure = false;
 
 	if (m_hashState) {
 		XXH3_freeState(m_hashState);
@@ -47,7 +48,8 @@ void FileTransferManager::sendFile(const QString &filePath) {
 	emit transferStarted(fileName);
 
 	m_isSending = true;
-	m_lastSpeedCheckBytes = 0;
+	qint64 buffered = m_networkBufferCb ? m_networkBufferCb() : 0;
+	m_lastSpeedCheckBytes = qMax((qint64)0, m_file.pos() - buffered);
 	m_transferSpeedTimer.start();
 
 	setSpeedLimit(m_speedLimitKbps);
@@ -74,8 +76,11 @@ void FileTransferManager::sendNextChunk() {
 	emit sendBinaryData(chunk);
 
 	qint64 bytesSent = m_file.pos();
-	emit progressUpdated(bytesSent, m_expectedFileSize);
-	updateSpeedStats(bytesSent);
+	qint64 buffered = m_networkBufferCb ? m_networkBufferCb() : 0;
+	qint64 actualBytesSent = qMax((qint64)0, bytesSent - buffered);
+
+	emit progressUpdated(actualBytesSent, m_expectedFileSize);
+	updateSpeedStats(actualBytesSent);
 }
 
 void FileTransferManager::handleJsonCommand(const QJsonObject &json) {
@@ -215,13 +220,20 @@ void FileTransferManager::togglePause() {
 	emit transferPaused(m_isPaused);
 }
 
+void FileTransferManager::setBackpressure(bool active) {
+	if (m_backpressure == active) return;
+	m_backpressure = active;
+	applyPauseState();
+}
+
 void FileTransferManager::applyPauseState() {
 	if (m_isSending) {
-		if (m_isPaused) {
+		if (m_isPaused || m_backpressure) {
 			m_fileSenderTimer.stop();
 		} else {
 			m_transferSpeedTimer.restart();
-			m_lastSpeedCheckBytes = m_file.pos();
+			qint64 buffered = m_networkBufferCb ? m_networkBufferCb() : 0;
+			m_lastSpeedCheckBytes = qMax((qint64)0, m_file.pos() - buffered);
 			m_fileSenderTimer.start();
 		}
 	} else if (!m_isPaused) {
@@ -234,7 +246,8 @@ void FileTransferManager::updateSpeedStats(qint64 currentBytes) {
 	qint64 elapsedMs = m_transferSpeedTimer.elapsed();
 	if (elapsedMs > 1000) {
 		double bytesPerSec = (currentBytes - m_lastSpeedCheckBytes) * 1000.0 / elapsedMs;
-		emit speedUpdated(bytesPerSec / (1024.0 * 1024.0), (m_expectedFileSize - currentBytes) / bytesPerSec);
+		if (bytesPerSec < 0) bytesPerSec = 0;
+		emit speedUpdated(bytesPerSec / (1024.0 * 1024.0), (m_expectedFileSize - currentBytes) / qMax(bytesPerSec, 1.0));
 		m_transferSpeedTimer.restart();
 		m_lastSpeedCheckBytes = currentBytes;
 	}

@@ -8,6 +8,7 @@
 #include <QObject>
 #include <QString>
 #include <QTimer>
+#include <functional>
 #include "xxhash.h"
 
 class FileTransferManager : public QObject {
@@ -20,6 +21,7 @@ public:
 	void cancelTransfer();
 	void togglePause();
 	void setDownloadPath(const QString &path) { m_downloadPath = path; }
+	void setNetworkBufferCallback(std::function<qint64()> cb) { m_networkBufferCb = std::move(cb); }
 
 signals:
 	void sendJsonCommand(const QJsonObject &json);
@@ -36,11 +38,13 @@ public slots:
 	void handleBinaryChunk(const QByteArray &chunk);
 	void onPeerDisconnected();
 	void setSpeedLimit(int kbps);
+	void setBackpressure(bool active);
 
 private slots:
 	void sendNextChunk();
 
 private:
+	std::function<qint64()> m_networkBufferCb;
 	XXH3_state_t* m_hashState = nullptr;
 	QString m_downloadPath;
 
@@ -55,6 +59,7 @@ private:
 
 	bool m_isSending = false;
 	bool m_isPaused = false;
+	bool m_backpressure = false;
 
 	void cleanup();
 	void applyPauseState();

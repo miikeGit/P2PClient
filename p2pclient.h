@@ -20,6 +20,7 @@ public:
 	void sendJson(const QJsonObject& json);
 	void sendBinary(const QByteArray& data);
 	void closeConnection();
+	qint64 getBufferedAmount() const;
 
 	QString getMyId() const { return m_myId; }
 
@@ -30,6 +31,7 @@ signals:
 	void jsonReceived(const QJsonObject& json);
 	void binaryReceived(const QByteArray& data);
 	void connectionStateChanged(int step, QString statusName, int maxSteps = 5);
+	void backpressureStateChanged(bool active);
 
 private slots:
 	void onMQTTConnected();
