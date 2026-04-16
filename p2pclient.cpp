@@ -174,7 +174,7 @@ void P2PClient::handleSignalingMessage(const QJsonObject &msg) {
 
 void P2PClient::checkConnectionReady() {
 	if (m_controlChannelOpen && m_binaryChannelOpen) {
-		qInfo() << "Both WebRTC DataChannels are open";
+		qInfo() << "All DataChannels are open";
 		emit connectionStateChanged(5, "Connection established!");
 		emit connectionEstablished();
 	}
@@ -195,7 +195,7 @@ void P2PClient::wireDataChannel(std::shared_ptr<rtc::DataChannel> channel) {
 		QMetaObject::invokeMethod(this, [this, channel]() {
 			qInfo() << "WebRTC DataChannel opened successfully:" << QString::fromStdString(channel->label());
 			if (channel->label() == "binary") {
-				try { channel->setBufferedAmountLowThreshold(2 * 1024 * 1024); } catch(...) {}
+				channel->setBufferedAmountLowThreshold(2 * 1024 * 1024);
 				m_binaryChannelOpen = true;
 			} else if (channel->label() == "control") {
 				m_controlChannelOpen = true;
@@ -222,9 +222,7 @@ void P2PClient::wireDataChannel(std::shared_ptr<rtc::DataChannel> channel) {
 			if (channel->label() == "binary") {
 				auto& bin = std::get<binary>(message);
 				QByteArray chunk(reinterpret_cast<const char *>(bin.data()), bin.size());
-				QMetaObject::invokeMethod(this, [this, chunk]() {
-					emit binaryReceived(chunk);
-				});
+				emit binaryReceived(chunk);
 			}
 		}
 	});

@@ -5,7 +5,7 @@
 #include <QCoreApplication>
 #include "xxhash.h"
 
-FileTransferManager::FileTransferManager(QObject *parent) : QObject(parent) {
+FileTransferManager::FileTransferManager(QObject *parent) : QObject(parent), m_fileSenderTimer(this), m_file(this) {
 	connect(&m_fileSenderTimer, &QTimer::timeout, this, &FileTransferManager::sendNextChunk);
 }
 
@@ -19,6 +19,7 @@ void FileTransferManager::cleanup() {
 	m_isSending = false;
 	m_isPaused = false;
 	m_backpressure = false;
+	m_expectedHash.clear();
 
 	if (m_hashState) {
 		XXH3_freeState(m_hashState);
@@ -46,18 +47,14 @@ void FileTransferManager::sendFile(const QString &filePath) {
 		{"file_size", m_expectedFileSize}
 	});
 	emit transferStarted(fileName);
-
 	m_isSending = true;
-	qint64 buffered = m_networkBufferCb ? m_networkBufferCb() : 0;
-	m_lastSpeedCheckBytes = qMax((qint64)0, m_file.pos() - buffered);
-	m_transferSpeedTimer.start();
-
-	setSpeedLimit(m_speedLimitKbps);
-	m_fileSenderTimer.start();
 }
 
 void FileTransferManager::sendNextChunk() {
 	if (m_file.atEnd()) {
+		qint64 buffered = m_networkBufferCb ? m_networkBufferCb() : 0;
+		if (buffered > 0) return;
+
 		XXH64_hash_t hashResult = XXH3_64bits_digest(m_hashState);
 		QString finalHash = QString::number(hashResult, 16).rightJustified(16, '0');
 		qInfo() << "All chunks sent. Final hash:" << finalHash;
@@ -70,16 +67,25 @@ void FileTransferManager::sendNextChunk() {
 		return;
 	}
 
-	constexpr qint64 CHUNK_SIZE = 16384;
+	constexpr qint64 CHUNK_SIZE = 65536;
+
+	qint64 buffered = m_networkBufferCb ? m_networkBufferCb() : 0;
+	if (buffered > 16 * 1024 * 1024) {
+		setBackpressure(true);
+		return;
+	}
+
 	QByteArray chunk = m_file.read(CHUNK_SIZE);
 	XXH3_64bits_update(m_hashState, chunk.constData(), chunk.size());
 	emit sendBinaryData(chunk);
 
 	qint64 bytesSent = m_file.pos();
-	qint64 buffered = m_networkBufferCb ? m_networkBufferCb() : 0;
 	qint64 actualBytesSent = qMax((qint64)0, bytesSent - buffered);
 
-	emit progressUpdated(actualBytesSent, m_expectedFileSize);
+	if (m_progressTimer.elapsed() > 33) {
+		emit progressUpdated(actualBytesSent, m_expectedFileSize);
+		m_progressTimer.restart();
+	}
 	updateSpeedStats(actualBytesSent);
 }
 
@@ -126,6 +132,7 @@ void FileTransferManager::handleJsonCommand(const QJsonObject &json) {
 
 			m_lastSpeedCheckBytes = m_receivedBytes;
 			m_transferSpeedTimer.start();
+			m_progressTimer.start();
 
 			emit sendJsonCommand({
 				{"action", "accept_transfer"},
@@ -145,9 +152,12 @@ void FileTransferManager::handleJsonCommand(const QJsonObject &json) {
 					m_file.seek(offset);
 					qInfo() << "Resuming transfer from offset:" << offset;
 					emit progressUpdated(offset, m_expectedFileSize);
-					m_lastSpeedCheckBytes = offset;
+					
+					qint64 buffered = m_networkBufferCb ? m_networkBufferCb() : 0;
+					m_lastSpeedCheckBytes = qMax((qint64)0, m_file.pos() - buffered);
 				}
 				m_transferSpeedTimer.start();
+				m_progressTimer.start();
 				setSpeedLimit(m_speedLimitKbps);
 				m_fileSenderTimer.start();
 			}
@@ -163,22 +173,8 @@ void FileTransferManager::handleJsonCommand(const QJsonObject &json) {
 			applyPauseState();
 			emit transferPaused(false);
 		} else if (action == "transfer_complete") {
-			QString expectedHash = json["file_hash"].toString();
-			XXH64_hash_t hashResult = XXH3_64bits_digest(m_hashState);
-			QString myHash = QString::number(hashResult, 16).rightJustified(16, '0');
-
-			m_file.close();
-			QString savedFilePath = m_file.fileName();
-			cleanup();
-
-			if (myHash == expectedHash) {
-				qInfo() << "File transferred successfully! Hash:" << myHash;
-				emit transferFinished();
-			} else {
-				qCritical() << "Hash mismatch!\nExpected:" << expectedHash << "\nGot:" << myHash;
-				QFile::remove(savedFilePath);
-				emit transferCanceled();
-			}
+			m_expectedHash = json["file_hash"].toString();
+			checkCompletion();
 		}
 	}
 }
@@ -190,8 +186,12 @@ void FileTransferManager::handleBinaryChunk(const QByteArray &chunk) {
 	XXH3_64bits_update(m_hashState, chunk.constData(), chunk.size());
 	m_receivedBytes += chunk.size();
 
-	emit progressUpdated(m_receivedBytes, m_expectedFileSize);
+	if (m_progressTimer.elapsed() > 33) {
+		emit progressUpdated(m_receivedBytes, m_expectedFileSize);
+		m_progressTimer.restart();
+	}
 	updateSpeedStats(m_receivedBytes);
+	checkCompletion();
 }
 
 void FileTransferManager::cancelTransfer() {
@@ -209,7 +209,7 @@ void FileTransferManager::onPeerDisconnected() {
 
 void FileTransferManager::setSpeedLimit(int kbps) {
 	m_speedLimitKbps = kbps;
-	m_fileSenderTimer.setInterval(m_speedLimitKbps > 0 ? qMax(1, (int)((16.0 / m_speedLimitKbps) * 1000)) : 0);
+	m_fileSenderTimer.setInterval(m_speedLimitKbps > 0 ? qMax(1, (int)((64.0 / m_speedLimitKbps) * 1000)) : 1);
 }
 
 void FileTransferManager::togglePause() {
@@ -231,14 +231,8 @@ void FileTransferManager::applyPauseState() {
 		if (m_isPaused || m_backpressure) {
 			m_fileSenderTimer.stop();
 		} else {
-			m_transferSpeedTimer.restart();
-			qint64 buffered = m_networkBufferCb ? m_networkBufferCb() : 0;
-			m_lastSpeedCheckBytes = qMax((qint64)0, m_file.pos() - buffered);
 			m_fileSenderTimer.start();
 		}
-	} else if (!m_isPaused) {
-		m_transferSpeedTimer.restart();
-		m_lastSpeedCheckBytes = m_receivedBytes;
 	}
 }
 
@@ -250,5 +244,25 @@ void FileTransferManager::updateSpeedStats(qint64 currentBytes) {
 		emit speedUpdated(bytesPerSec / (1024.0 * 1024.0), (m_expectedFileSize - currentBytes) / qMax(bytesPerSec, 1.0));
 		m_transferSpeedTimer.restart();
 		m_lastSpeedCheckBytes = currentBytes;
+	}
+}
+
+void FileTransferManager::checkCompletion() {
+	if (m_expectedFileSize > 0 && m_receivedBytes >= m_expectedFileSize && !m_expectedHash.isEmpty()) {
+		XXH64_hash_t hashResult = XXH3_64bits_digest(m_hashState);
+		QString myHash = QString::number(hashResult, 16).rightJustified(16, '0');
+
+		m_file.close();
+		QString savedFilePath = m_file.fileName();
+		cleanup();
+
+		if (myHash == m_expectedHash) {
+			qInfo() << "File transferred successfully! Hash:" << myHash;
+			emit transferFinished();
+		} else {
+			qCritical() << "Hash mismatch!\nExpected:" << m_expectedHash << "\nGot:" << myHash;
+			QFile::remove(savedFilePath);
+			emit transferCanceled();
+		}
 	}
 }

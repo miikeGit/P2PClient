@@ -2,12 +2,12 @@
 #define FILETRANSFERMANAGER_H
 
 #include <QByteArray>
-#include <QElapsedTimer>
-#include <QFile>
 #include <QJsonObject>
 #include <QObject>
 #include <QString>
 #include <QTimer>
+#include <QElapsedTimer>
+#include <QFile>
 #include <functional>
 #include "xxhash.h"
 
@@ -51,6 +51,7 @@ private:
 	QFile m_file;
 	QTimer m_fileSenderTimer;
 	QElapsedTimer m_transferSpeedTimer;
+	QElapsedTimer m_progressTimer;
 
 	qint64 m_expectedFileSize = 0;
 	qint64 m_receivedBytes = 0;
@@ -60,10 +61,13 @@ private:
 	bool m_isSending = false;
 	bool m_isPaused = false;
 	bool m_backpressure = false;
+	
+	QString m_expectedHash;
 
 	void cleanup();
 	void applyPauseState();
 	void updateSpeedStats(qint64 currentBytes);
+	void checkCompletion();
 	QString calculateFileHash();
 };
 

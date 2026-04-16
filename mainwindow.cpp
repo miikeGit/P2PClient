@@ -19,13 +19,22 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), m_appConfig(AppCo
 		if (data.size() < 4) return;
 		int id;
 		memcpy(&id, data.constData(), 4);
-		if (m_transfers.contains(id)) m_transfers[id].manager->handleBinaryChunk(data.mid(4));
-	});
+		if (m_transfers.contains(id)) {
+			auto mgr = m_transfers[id].manager;
+			QByteArray chunk = data.mid(4);
+			QMetaObject::invokeMethod(mgr, [mgr, chunk]() { mgr->handleBinaryChunk(chunk); });
+		}
+	}, Qt::DirectConnection);
 
 	connect(m_p2pClient, &P2PClient::jsonReceived, this, [this](const QJsonObject& json) {
 		int id = json["transfer_id"].toInt();
-		if (!m_transfers.contains(id)) createTransferManager(id);
-		if (m_transfers.contains(id)) m_transfers[id].manager->handleJsonCommand(json);
+		
+		if (!m_transfers.contains(id) && json.contains("file_name")) createTransferManager(id);
+
+		if (m_transfers.contains(id)) {
+			auto mgr = m_transfers[id].manager;
+			QMetaObject::invokeMethod(mgr, [mgr, json]() { mgr->handleJsonCommand(json); });
+		}
 	});
 
 	connect(m_p2pClient, &P2PClient::connectionEstablished, this, [this]() {
@@ -34,7 +43,10 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), m_appConfig(AppCo
 	});
 
 	connect(m_p2pClient, &P2PClient::connectionClosed, this, [this]() {
-		for (const auto& session : m_transfers) session.manager->onPeerDisconnected();
+		for (const auto& session : std::as_const(m_transfers)) {
+			auto mgr = session.manager;
+			QMetaObject::invokeMethod(mgr, [mgr]() { mgr->onPeerDisconnected(); });
+		}
 		ui->targetIdLineEdit->clear();
 		ui->callButton->setEnabled(true);
 		ui->sendFileButton->setEnabled(false);
@@ -46,7 +58,10 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), m_appConfig(AppCo
 	});
 
 	connect(m_p2pClient, &P2PClient::backpressureStateChanged, this, [this](bool active) {
-		for (const auto& session : std::as_const(m_transfers)) session.manager->setBackpressure(active);
+		for (const auto& session : std::as_const(m_transfers)) {
+			auto mgr = session.manager;
+			QMetaObject::invokeMethod(mgr, [mgr, active]() { mgr->setBackpressure(active); });
+		}
 	});
 
 	connect(ui->speedLimitSpinBox, QOverload<int>::of(&QSpinBox::valueChanged), this, &MainWindow::updateSpeedLimits);
@@ -57,7 +72,10 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), m_appConfig(AppCo
 MainWindow::~MainWindow() = default;
 
 FileTransferManager* MainWindow::createTransferManager(int id) {
-	auto manager = new FileTransferManager(this);
+	auto manager = new FileTransferManager();
+	auto workerThread = new QThread(this);
+	manager->moveToThread(workerThread);
+
 	manager->setDownloadPath(ui->downloadPath->text());
 
 	auto transferWidget = new QWidget(ui->transfersContainer);
@@ -92,7 +110,7 @@ FileTransferManager* MainWindow::createTransferManager(int id) {
 
 	ui->verticalLayout_transfers->addWidget(transferWidget);
 
-	m_transfers[id] = {manager, transferWidget, nameLabel, progressBar, statusLabel, pauseButton, cancelButton};
+	m_transfers[id] = {manager, workerThread, transferWidget, nameLabel, progressBar, statusLabel, pauseButton, cancelButton};
 
 	connect(pauseButton, &QPushButton::clicked, manager, &FileTransferManager::togglePause);
 	connect(cancelButton, &QPushButton::clicked, manager, &FileTransferManager::cancelTransfer);
@@ -102,12 +120,12 @@ FileTransferManager* MainWindow::createTransferManager(int id) {
 		pkt.append(reinterpret_cast<const char*>(&id), sizeof(id)); 
 		pkt.append(data);
 		m_p2pClient->sendBinary(pkt);
-	});
+	}, Qt::DirectConnection);
 
 	connect(manager, &FileTransferManager::sendJsonCommand, this, [this, id](QJsonObject json) {
 		json["transfer_id"] = id;
 		m_p2pClient->sendJson(json);
-	});
+	}, Qt::DirectConnection);
 
 	connect(manager, &FileTransferManager::transferStarted, this, [this, id](const QString& name) {
 		if (auto it = m_transfers.find(id); it != m_transfers.end()) {
@@ -154,18 +172,24 @@ FileTransferManager* MainWindow::createTransferManager(int id) {
 	});
 
 	manager->setNetworkBufferCallback([this]() -> qint64 {
-		if (m_p2pClient && !m_transfers.isEmpty()) {
-			return m_p2pClient->getBufferedAmount() / m_transfers.size();
+		if (m_p2pClient && m_activeTransfersCount.load() > 0) {
+			return m_p2pClient->getBufferedAmount() / m_activeTransfersCount.load();
 		}
 		return 0;
 	});
 
+	connect(manager, &FileTransferManager::destroyed, workerThread, &QThread::quit);
+	connect(workerThread, &QThread::finished, workerThread, &QObject::deleteLater);
+	workerThread->start();
+
+	m_activeTransfersCount++;
 	updateSpeedLimits();
 	return manager;
 }
 
 void MainWindow::cleanupTransfer(int id) {
 	if (auto it = m_transfers.find(id); it != m_transfers.end()) {
+		m_activeTransfersCount--;
 		it->container->deleteLater();
 		it->manager->deleteLater();
 		m_transfers.erase(it);
@@ -177,7 +201,10 @@ void MainWindow::cleanupTransfer(int id) {
 void MainWindow::updateSpeedLimits() {
 	int maxLimit = ui->speedLimitSpinBox->value();
 	int limitPerTransfer = maxLimit > 0 ? (maxLimit / qMax(1, (int)m_transfers.size())) : 0;
-	for (const auto& session : m_transfers) session.manager->setSpeedLimit(limitPerTransfer);
+	for (const auto& session : std::as_const(m_transfers)) {
+		auto mgr = session.manager;
+		QMetaObject::invokeMethod(mgr, [mgr, limitPerTransfer]() { mgr->setSpeedLimit(limitPerTransfer); });
+	}
 }
 
 void MainWindow::on_callButton_clicked() {
@@ -195,7 +222,8 @@ void MainWindow::on_sendFileButton_clicked() {
 	qDebug() << "Opening File Dialog...";
 	for (const QString& path : QFileDialog::getOpenFileNames(this)) {
 		qInfo() << "Selected file to send:" << path;
-		createTransferManager(m_nextTransferId++)->sendFile(path);
+		auto mgr = createTransferManager(m_nextTransferId++);
+		QMetaObject::invokeMethod(mgr, [mgr, path]() { mgr->sendFile(path); });
 	}
 }
 
@@ -208,7 +236,10 @@ void MainWindow::on_selectDownloadPathButton_clicked() {
 	QString dir = QFileDialog::getExistingDirectory(this, "Select download destination...", ui->downloadPath->text(), QFileDialog::ShowDirsOnly | QFileDialog::DontResolveSymlinks);
 	if (!dir.isEmpty()) {
 		ui->downloadPath->setText(dir);
-		for (const auto& session : m_transfers) session.manager->setDownloadPath(dir);
+		for (const auto& session : std::as_const(m_transfers)) {
+			auto mgr = session.manager;
+			QMetaObject::invokeMethod(mgr, [mgr, dir]() { mgr->setDownloadPath(dir); });
+		}
 
 		m_appConfig.downloadPath = dir;
 		if (m_appConfig.save(m_configPath)) {

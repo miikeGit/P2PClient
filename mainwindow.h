@@ -10,6 +10,8 @@
 #include <QProgressBar>
 #include <QPushButton>
 #include <QApplication>
+#include <QThread>
+#include <atomic>
 
 QT_BEGIN_NAMESPACE
 namespace Ui { class MainWindow; }
@@ -17,6 +19,7 @@ QT_END_NAMESPACE
 
 struct TransferSession {
 	FileTransferManager* manager;
+	QThread* workerThread;
 	QWidget* container;
 	QLabel* nameLabel;
 	QProgressBar* progressBar;
@@ -43,6 +46,7 @@ private:
 	
 	QMap<int, TransferSession> m_transfers;
 	int m_nextTransferId = 1;
+	std::atomic<int> m_activeTransfersCount{0};
 
 	QString m_configPath = qApp->applicationDirPath() + "/config.json";
 	AppConfig m_appConfig;
