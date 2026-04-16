@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.16)
-project(P2PClient VERSION 0.1 LANGUAGES CXX)
+project(P2PClient VERSION 0.1 LANGUAGES CXX C)
 
 set(CMAKE_AUTOUIC ON)
 set(CMAKE_AUTOMOC ON)
@@ -79,6 +79,7 @@ set(COMMON_SOURCES
     p2pclient.h p2pclient.cpp
     filetransfermanager.h filetransfermanager.cpp
     appconfig.h appconfig.cpp
+    xxhash.h xxhash.c
 )
 
 set(PROJECT_SOURCES main.cpp mainwindow.cpp mainwindow.h mainwindow.ui ${COMMON_SOURCES})
@@ -108,9 +109,8 @@ endif()
 add_custom_command(TARGET P2PClient POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E copy_if_different
     "${CMAKE_CURRENT_SOURCE_DIR}/config.json"
-    "${CMAKE_CURRENT_BINARY_DIR}/config.json"
+    "$<TARGET_FILE_DIR:P2PClient>/config.json"
 )
-
 
 enable_testing()
 

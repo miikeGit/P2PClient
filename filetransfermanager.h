@@ -8,6 +8,7 @@
 #include <QObject>
 #include <QString>
 #include <QTimer>
+#include "xxhash.h"
 
 class FileTransferManager : public QObject {
 	Q_OBJECT
@@ -29,7 +30,6 @@ signals:
 	void transferFinished();
 	void transferCanceled();
 	void transferPaused(bool paused);
-	void hashProgressUpdated(qint64 current, qint64 total);
 
 public slots:
 	void handleJsonCommand(const QJsonObject &json);
@@ -41,10 +41,8 @@ private slots:
 	void sendNextChunk();
 
 private:
-	QString m_expectedHash;
+	XXH3_state_t* m_hashState = nullptr;
 	QString m_downloadPath;
-
-	static constexpr qint64 CHUNK_SIZE = 16384;
 
 	QFile m_file;
 	QTimer m_fileSenderTimer;
@@ -56,13 +54,12 @@ private:
 	qint64 m_speedLimitKbps = 0;
 
 	bool m_isSending = false;
-	bool m_cancelTransfer = false;
 	bool m_isPaused = false;
 
 	void cleanup();
 	void applyPauseState();
 	void updateSpeedStats(qint64 currentBytes);
-	QString calculateSha256();
+	QString calculateFileHash();
 };
 
 #endif // FILETRANSFERMANAGER_H

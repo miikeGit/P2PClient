@@ -29,7 +29,6 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), m_appConfig(AppCo
 	});
 
 	connect(m_p2pClient, &P2PClient::connectionEstablished, this, [this]() {
-		QMessageBox::information(this, "Success!", "Connection established");
 		ui->callButton->setEnabled(false);
 		ui->sendFileButton->setEnabled(true);
 	});
@@ -141,21 +140,13 @@ FileTransferManager* MainWindow::createTransferManager(int id) {
 		qInfo() << "Transfer finished ID:" << id;
 		cleanupTransfer(id);
 		if (m_transfers.isEmpty()) {
-			QMessageBox::information(this, "Success!", "All file transfers finished successfully");
+			ui->statusbar->showMessage("All file transfers finished successfully", 5000);
 		}
 	});
 
 	connect(manager, &FileTransferManager::transferCanceled, this, [this, id]() {
 		qWarning() << "Transfer canceled ID:" << id;
 		cleanupTransfer(id);
-	});
-
-	connect(manager, &FileTransferManager::hashProgressUpdated, this, [this, id](qint64 current, qint64 total) {
-		if (auto it = m_transfers.find(id); it != m_transfers.end()) {
-			it->progressBar->setMaximum(100);
-			it->progressBar->setValue((total > 0) ? static_cast<int>((current * 100) / total) : 0);
-			it->statusLabel->setText("Calculating hash...");
-		}
 	});
 
 	updateSpeedLimits();
