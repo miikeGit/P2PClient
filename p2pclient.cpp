@@ -1,5 +1,6 @@
 #include "p2pclient.h"
 #include <QSslConfiguration>
+#include <QJsonDocument>
 
 using namespace rtc;
 

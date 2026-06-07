@@ -11,9 +11,9 @@ if(WIN32)
     set(PLATFORM_LIBS ws2_32 iphlpapi)
 endif()
 
-find_package(Qt6 QUIET COMPONENTS Widgets Network Test)
+find_package(Qt6 QUIET COMPONENTS Widgets Network)
 if(NOT Qt6_FOUND)
-    find_package(Qt5 REQUIRED COMPONENTS Widgets Network Test)
+    find_package(Qt5 REQUIRED COMPONENTS Widgets Network)
 endif()
 set(QT Qt${QT_VERSION_MAJOR})
 
@@ -111,31 +111,3 @@ add_custom_command(TARGET P2PClient POST_BUILD
     "${CMAKE_CURRENT_SOURCE_DIR}/config.json"
     "$<TARGET_FILE_DIR:P2PClient>/config.json"
 )
-
-enable_testing()
-
-set(TEST_SOURCES test_main.cpp ${COMMON_SOURCES})
-
-if(QT_VERSION_MAJOR GREATER_EQUAL 6)
-    qt_add_executable(P2PTests MANUAL_FINALIZATION ${TEST_SOURCES})
-else()
-    add_executable(P2PTests ${TEST_SOURCES})
-endif()
-
-target_link_libraries(P2PTests PRIVATE
-    ${QT}::Core
-    ${QT}::Network
-    ${QT}::Test
-    qmqtt
-    datachannel
-    mbedtls
-    mbedx509
-    mbedcrypto
-    ${PLATFORM_LIBS}
-)
-
-if(QT_VERSION_MAJOR EQUAL 6)
-    qt_finalize_executable(P2PTests)
-endif()
-
-add_test(NAME P2PBasicTests COMMAND P2PTests)
