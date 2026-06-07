@@ -157,7 +157,6 @@ void FileTransferManager::handleJsonCommand(const QJsonObject &json) {
 				}
 				m_transferSpeedTimer.start();
 				m_progressTimer.start();
-				setSpeedLimit(m_speedLimitKbps);
 				m_fileSenderTimer.start();
 			}
 		} else if (action == "cancel_transfer" || action == "receiver_canceled") {
@@ -200,11 +199,6 @@ void FileTransferManager::onPeerDisconnected() {
 	qWarning() << "Peer disconnected. Aborting active file transfer";
 	cleanup();
 	emit transferCanceled();
-}
-
-void FileTransferManager::setSpeedLimit(int kbps) {
-	m_speedLimitKbps = kbps;
-	m_fileSenderTimer.setInterval(m_speedLimitKbps > 0 ? qMax(1, (int)((64.0 / m_speedLimitKbps) * 1000)) : 1);
 }
 
 void FileTransferManager::setBackpressure(bool active) {

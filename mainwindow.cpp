@@ -27,7 +27,6 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), m_appConfig(AppCo
 	connect(m_p2pClient, &P2PClient::backpressureStateChanged, m_fileManager, &FileTransferManager::setBackpressure);
 	connect(m_fileManager, &FileTransferManager::sendBinaryData, m_p2pClient, &P2PClient::sendBinary, Qt::DirectConnection);
 	connect(m_fileManager, &FileTransferManager::sendJsonCommand, m_p2pClient, &P2PClient::sendJson, Qt::DirectConnection);
-	connect(ui->speedLimitSpinBox, QOverload<int>::of(&QSpinBox::valueChanged), m_fileManager, &FileTransferManager::setSpeedLimit);
 
 	connect(m_p2pClient, &P2PClient::connectionEstablished, this, [this]() {
 		ui->callButton->setEnabled(false);
