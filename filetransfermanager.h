@@ -19,7 +19,6 @@ public:
 
 	void sendFile(const QString &filePath);
 	void cancelTransfer();
-	void togglePause();
 	void setDownloadPath(const QString &path) { m_downloadPath = path; }
 	void setNetworkBufferCallback(std::function<qint64()> cb) { m_networkBufferCb = std::move(cb); }
 
@@ -31,7 +30,6 @@ signals:
 	void speedUpdated(double mbps, int eta);
 	void transferFinished();
 	void transferCanceled();
-	void transferPaused(bool paused);
 
 public slots:
 	void handleJsonCommand(const QJsonObject &json);
@@ -59,16 +57,13 @@ private:
 	qint64 m_speedLimitKbps = 0;
 
 	bool m_isSending = false;
-	bool m_isPaused = false;
 	bool m_backpressure = false;
-	
+
 	QString m_expectedHash;
 
 	void cleanup();
-	void applyPauseState();
 	void updateSpeedStats(qint64 currentBytes);
 	void checkCompletion();
-	QString calculateFileHash();
 };
 
 #endif // FILETRANSFERMANAGER_H

@@ -17,7 +17,6 @@ void FileTransferManager::cleanup() {
 	m_fileSenderTimer.stop();
 	if (m_file.isOpen()) m_file.close();
 	m_isSending = false;
-	m_isPaused = false;
 	m_backpressure = false;
 	m_expectedHash.clear();
 
@@ -60,7 +59,7 @@ void FileTransferManager::sendNextChunk() {
 		qInfo() << "All chunks sent. Final hash:" << finalHash;
 
 		emit sendJsonCommand({{"action", "transfer_complete"},
-													{"file_hash", finalHash}});
+							  {"file_hash", finalHash}});
 
 		cleanup();
 		emit transferFinished();
@@ -152,7 +151,7 @@ void FileTransferManager::handleJsonCommand(const QJsonObject &json) {
 					m_file.seek(offset);
 					qInfo() << "Resuming transfer from offset:" << offset;
 					emit progressUpdated(offset, m_expectedFileSize);
-					
+
 					qint64 buffered = m_networkBufferCb ? m_networkBufferCb() : 0;
 					m_lastSpeedCheckBytes = qMax((qint64)0, m_file.pos() - buffered);
 				}
@@ -164,14 +163,6 @@ void FileTransferManager::handleJsonCommand(const QJsonObject &json) {
 		} else if (action == "cancel_transfer" || action == "receiver_canceled") {
 			cleanup();
 			emit transferCanceled();
-		} else if (action == "pause_transfer") {
-			m_isPaused = true;
-			applyPauseState();
-			emit transferPaused(true);
-		} else if (action == "resume_transfer") {
-			m_isPaused = false;
-			applyPauseState();
-			emit transferPaused(false);
 		} else if (action == "transfer_complete") {
 			m_expectedHash = json["file_hash"].toString();
 			checkCompletion();
@@ -196,13 +187,17 @@ void FileTransferManager::handleBinaryChunk(const QByteArray &chunk) {
 
 void FileTransferManager::cancelTransfer() {
 	qWarning() << "Canceling transfer locally";
+	const bool wasSending = m_isSending;
 	cleanup();
 	emit transferCanceled();
-	emit sendJsonCommand({{"action", "cancel_transfer"}});
+
+	QJsonObject cancelMsg;
+	cancelMsg["action"] = wasSending ? QStringLiteral("cancel_transfer") : QStringLiteral("receiver_canceled");
+	emit sendJsonCommand(cancelMsg);
 }
 
 void FileTransferManager::onPeerDisconnected() {
-	qWarning() << "Peer disconnected. Aborting active file transfers";
+	qWarning() << "Peer disconnected. Aborting active file transfer";
 	cleanup();
 	emit transferCanceled();
 }
@@ -212,23 +207,11 @@ void FileTransferManager::setSpeedLimit(int kbps) {
 	m_fileSenderTimer.setInterval(m_speedLimitKbps > 0 ? qMax(1, (int)((64.0 / m_speedLimitKbps) * 1000)) : 1);
 }
 
-void FileTransferManager::togglePause() {
-	m_isPaused = !m_isPaused;
-	emit sendJsonCommand({{"action", m_isPaused ? "pause_transfer" : "resume_transfer"}});
-
-	applyPauseState();
-	emit transferPaused(m_isPaused);
-}
-
 void FileTransferManager::setBackpressure(bool active) {
 	if (m_backpressure == active) return;
 	m_backpressure = active;
-	applyPauseState();
-}
-
-void FileTransferManager::applyPauseState() {
 	if (m_isSending) {
-		if (m_isPaused || m_backpressure) {
+		if (m_backpressure) {
 			m_fileSenderTimer.stop();
 		} else {
 			m_fileSenderTimer.start();
