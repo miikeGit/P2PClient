@@ -3,6 +3,7 @@
 #include <QClipboard>
 #include <QFileDialog>
 #include <QMessageBox>
+#include <QStyle>
 
 MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), m_appConfig(AppConfig::load(m_configPath)), ui(std::make_unique<Ui::MainWindow>()) {
 	ui->setupUi(this);
@@ -23,6 +24,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), m_appConfig(AppCo
 	});
 
 	wireSignals();
+	setConnectionStatus(false);
 
 	m_workerThread->start();
 	m_p2pClient->connectToBroker();
@@ -43,11 +45,13 @@ void MainWindow::wireSignals() {
 	connect(m_fileManager, &FileTransferManager::sendJsonCommand, m_p2pClient, &P2PClient::sendJson, Qt::DirectConnection);
 
 	connect(m_p2pClient, &P2PClient::connectionEstablished, this, [this]() {
+		setConnectionStatus(true);
 		ui->callButton->setEnabled(false);
 		ui->sendFileButton->setEnabled(true);
 	});
 
 	connect(m_p2pClient, &P2PClient::connectionClosed, this, [this]() {
+		setConnectionStatus(false);
 		QMetaObject::invokeMethod(m_fileManager, [mgr = m_fileManager]() { mgr->onPeerDisconnected(); });
 		ui->targetIdLineEdit->clear();
 		ui->callButton->setEnabled(true);
@@ -133,6 +137,14 @@ void MainWindow::on_selectDownloadPathButton_clicked() {
 			qInfo() << "Download path saved to config.json:" << dir;
 		}
 	}
+}
+
+void MainWindow::setConnectionStatus(bool online) {
+	const QString dot = QString::fromUtf8("\xE2\x97\x8F");
+	ui->statusPill->setText(dot + (online ? "  Connected" : "  Offline"));
+	ui->statusPill->setProperty("online", online);
+	ui->statusPill->style()->unpolish(ui->statusPill);
+	ui->statusPill->style()->polish(ui->statusPill);
 }
 
 void MainWindow::clearFileInfo() {

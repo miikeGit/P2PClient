@@ -8,7 +8,7 @@ set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 if(WIN32)
-    set(PLATFORM_LIBS ws2_32 iphlpapi)
+    set(PLATFORM_LIBS ws2_32 iphlpapi dwmapi)
 endif()
 
 find_package(Qt6 QUIET COMPONENTS Widgets Network)

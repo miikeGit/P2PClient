@@ -6,55 +6,274 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>258</width>
-    <height>440</height>
+    <width>470</width>
+    <height>660</height>
    </rect>
   </property>
-  <property name="windowTitle">
-   <string>P2P Client</string>
+  <property name="minimumSize">
+   <size>
+    <width>440</width>
+    <height>620</height>
+   </size>
   </property>
-  <property name="windowIcon">
-   <iconset theme="QIcon::ThemeIcon::NetworkWireless"/>
+  <property name="windowTitle">
+   <string>P2P Transfer</string>
+  </property>
+  <property name="styleSheet">
+   <string notr="true">* {
+    font-family: "Segoe UI", "Inter", "Helvetica Neue", sans-serif;
+    font-size: 13px;
+    color: #e6e8ef;
+}
+
+QMainWindow, QWidget#centralwidget {
+    background-color: #121319;
+}
+
+QLabel#statusPill {
+    padding: 5px 14px;
+    border-radius: 11px;
+    font-size: 12px;
+    font-weight: 600;
+}
+
+QLabel#statusPill[online="true"] {
+    background-color: rgba(62, 207, 142, 0.14);
+    color: #3ecf8e;
+    border: 1px solid rgba(62, 207, 142, 0.40);
+}
+
+QLabel#statusPill[online="false"] {
+    background-color: rgba(255, 92, 92, 0.12);
+    color: #ff6b6b;
+    border: 1px solid rgba(255, 92, 92, 0.35);
+}
+
+QFrame#cardConnection, QFrame#cardTransfer {
+    background-color: #1a1c24;
+    border: 1px solid #262935;
+    border-radius: 14px;
+}
+
+QLabel#sectionConnection, QLabel#sectionTransfer, QLabel#sectionDownload {
+    font-size: 11px;
+    font-weight: 700;
+    color: #6f7488;
+}
+
+QLabel#label_1 {
+    color: #8b8f9e;
+}
+
+QLabel#myIdLabel {
+    font-family: "Consolas", "Menlo", monospace;
+    font-weight: 700;
+    color: #5b8cff;
+}
+
+QLabel#fileNameLabel {
+    color: #b9bdca;
+}
+
+QLabel#statusLabel {
+    color: #8b8f9e;
+    font-size: 12px;
+}
+
+QLineEdit {
+    background-color: #11131a;
+    border: 1px solid #2a2d39;
+    border-radius: 9px;
+    padding: 9px 12px;
+    selection-background-color: #5b8cff;
+}
+
+QLineEdit:focus {
+    border: 1px solid #5b8cff;
+}
+
+QLineEdit:read-only {
+    color: #8b8f9e;
+}
+
+QPushButton {
+    background-color: #242736;
+    border: 1px solid #2f3343;
+    border-radius: 9px;
+    padding: 8px 16px;
+    font-weight: 600;
+}
+
+QPushButton:hover {
+    background-color: #2c3042;
+}
+
+QPushButton:pressed {
+    background-color: #20232f;
+}
+
+QPushButton:disabled {
+    background-color: #1a1c24;
+    color: #565a68;
+    border: 1px solid #23262f;
+}
+
+QPushButton#callButton, QPushButton#sendFileButton {
+    background-color: #5b8cff;
+    border: none;
+    color: #ffffff;
+}
+
+QPushButton#callButton:hover, QPushButton#sendFileButton:hover {
+    background-color: #6f9bff;
+}
+
+QPushButton#callButton:pressed, QPushButton#sendFileButton:pressed {
+    background-color: #4f7de0;
+}
+
+QPushButton#callButton:disabled, QPushButton#sendFileButton:disabled {
+    background-color: #2a3350;
+    color: #7f8aa6;
+}
+
+QPushButton#cancelButton {
+    background-color: transparent;
+    border: 1px solid #4a3940;
+    color: #ff6b6b;
+}
+
+QPushButton#cancelButton:hover {
+    background-color: rgba(255, 92, 92, 0.12);
+}
+
+QPushButton#cancelButton:disabled {
+    background-color: transparent;
+    border: 1px solid #2a2730;
+    color: #565a68;
+}
+
+QProgressBar {
+    background-color: #11131a;
+    border: none;
+    border-radius: 5px;
+}
+
+QProgressBar::chunk {
+    background-color: #5b8cff;
+    border-radius: 5px;
+}
+
+Line, QFrame[frameShape="4"] {
+    color: #262935;
+    background-color: #262935;
+}
+
+QStatusBar {
+    background-color: #121319;
+    color: #8b8f9e;
+    border: none;
+}
+
+QStatusBar::item {
+    border: none;
+}
+
+QToolTip {
+    background-color: #1a1c24;
+    color: #e6e8ef;
+    border: 1px solid #2a2d39;
+    border-radius: 6px;
+    padding: 4px 8px;
+}
+</string>
   </property>
   <widget class="QWidget" name="centralwidget">
    <layout class="QVBoxLayout" name="verticalLayout_main">
     <property name="spacing">
-     <number>15</number>
+     <number>18</number>
     </property>
     <property name="leftMargin">
-     <number>20</number>
+     <number>24</number>
     </property>
     <property name="topMargin">
-     <number>20</number>
+     <number>24</number>
     </property>
     <property name="rightMargin">
-     <number>20</number>
+     <number>24</number>
     </property>
     <property name="bottomMargin">
-     <number>20</number>
+     <number>24</number>
     </property>
     <item>
-     <widget class="QGroupBox" name="groupBoxConnection">
-      <property name="title">
-       <string>Connection</string>
-      </property>
+     <widget class="QFrame" name="cardConnection">
       <layout class="QVBoxLayout" name="verticalLayout_conn">
+       <property name="spacing">
+        <number>12</number>
+       </property>
+       <property name="leftMargin">
+        <number>18</number>
+       </property>
+       <property name="topMargin">
+        <number>16</number>
+       </property>
+       <property name="rightMargin">
+        <number>18</number>
+       </property>
+       <property name="bottomMargin">
+        <number>16</number>
+       </property>
+       <item>
+        <layout class="QHBoxLayout" name="horizontalLayout_status">
+         <item>
+          <widget class="QLabel" name="sectionConnection">
+           <property name="text">
+            <string>CONNECTION</string>
+           </property>
+          </widget>
+         </item>
+         <item>
+          <spacer name="horizontalSpacer_status">
+           <property name="orientation">
+            <enum>Qt::Orientation::Horizontal</enum>
+           </property>
+           <property name="sizeHint" stdset="0">
+            <size>
+             <width>40</width>
+             <height>20</height>
+            </size>
+           </property>
+          </spacer>
+         </item>
+         <item>
+          <widget class="QLabel" name="statusPill">
+           <property name="sizePolicy">
+            <sizepolicy hsizetype="Maximum" vsizetype="Fixed">
+             <horstretch>0</horstretch>
+             <verstretch>0</verstretch>
+            </sizepolicy>
+           </property>
+           <property name="text">
+            <string>Offline</string>
+           </property>
+           <property name="alignment">
+            <set>Qt::AlignmentFlag::AlignCenter</set>
+           </property>
+          </widget>
+         </item>
+        </layout>
+       </item>
        <item>
         <layout class="QHBoxLayout" name="horizontalLayout_id">
          <item>
           <widget class="QLabel" name="label_1">
            <property name="text">
-            <string>My ID:</string>
+            <string>Your ID</string>
            </property>
           </widget>
          </item>
          <item>
           <widget class="QLabel" name="myIdLabel">
-           <property name="font">
-            <font>
-             <bold>true</bold>
-            </font>
-           </property>
            <property name="text">
             <string>Generating...</string>
            </property>
@@ -79,13 +298,10 @@
          <item>
           <widget class="QPushButton" name="copyIdButton">
            <property name="toolTip">
-            <string>Copy ID</string>
+            <string>Copy your ID to clipboard</string>
            </property>
            <property name="text">
-            <string/>
-           </property>
-           <property name="icon">
-            <iconset theme="edit-copy"/>
+            <string>Copy</string>
            </property>
           </widget>
          </item>
@@ -96,12 +312,18 @@
          <item>
           <widget class="QLineEdit" name="targetIdLineEdit">
            <property name="placeholderText">
-            <string>Paste target ID here</string>
+            <string>Paste a peer ID to connect</string>
            </property>
           </widget>
          </item>
          <item>
           <widget class="QPushButton" name="callButton">
+           <property name="minimumSize">
+            <size>
+             <width>0</width>
+             <height>38</height>
+            </size>
+           </property>
            <property name="text">
             <string>Connect</string>
            </property>
@@ -113,11 +335,30 @@
      </widget>
     </item>
     <item>
-     <widget class="QGroupBox" name="groupBoxTransfer">
-      <property name="title">
-       <string>File Transfer</string>
-      </property>
+     <widget class="QFrame" name="cardTransfer">
       <layout class="QVBoxLayout" name="verticalLayout_trans">
+       <property name="spacing">
+        <number>14</number>
+       </property>
+       <property name="leftMargin">
+        <number>18</number>
+       </property>
+       <property name="topMargin">
+        <number>16</number>
+       </property>
+       <property name="rightMargin">
+        <number>18</number>
+       </property>
+       <property name="bottomMargin">
+        <number>16</number>
+       </property>
+       <item>
+        <widget class="QLabel" name="sectionTransfer">
+         <property name="text">
+          <string>FILE TRANSFER</string>
+         </property>
+        </widget>
+       </item>
        <item>
         <widget class="QPushButton" name="sendFileButton">
          <property name="enabled">
@@ -126,16 +367,11 @@
          <property name="minimumSize">
           <size>
            <width>0</width>
-           <height>40</height>
+           <height>46</height>
           </size>
          </property>
-         <property name="font">
-          <font>
-           <bold>true</bold>
-          </font>
-         </property>
          <property name="text">
-          <string>Select file</string>
+          <string>Select File to Send</string>
          </property>
         </widget>
        </item>
@@ -151,11 +387,17 @@
        </item>
        <item>
         <widget class="QProgressBar" name="progressBar">
+         <property name="minimumHeight">
+          <number>10</number>
+         </property>
+         <property name="maximumHeight">
+          <number>10</number>
+         </property>
          <property name="value">
           <number>0</number>
          </property>
-         <property name="alignment">
-          <set>Qt::AlignmentFlag::AlignCenter</set>
+         <property name="textVisible">
+          <bool>false</bool>
          </property>
         </widget>
        </item>
@@ -194,11 +436,25 @@
         </layout>
        </item>
        <item>
+        <widget class="Line" name="divider">
+         <property name="orientation">
+          <enum>Qt::Orientation::Horizontal</enum>
+         </property>
+        </widget>
+       </item>
+       <item>
+        <widget class="QLabel" name="sectionDownload">
+         <property name="text">
+          <string>SAVE LOCATION</string>
+         </property>
+        </widget>
+       </item>
+       <item>
         <layout class="QHBoxLayout" name="horizontalLayout_path">
          <item>
           <widget class="QLineEdit" name="downloadPath">
            <property name="toolTip">
-            <string>Select where to save transfered files</string>
+            <string>Where received files are saved</string>
            </property>
            <property name="text">
             <string/>
@@ -207,20 +463,17 @@
             <bool>true</bool>
            </property>
            <property name="placeholderText">
-            <string>Select where to save transfered files</string>
+            <string>Where received files are saved</string>
            </property>
           </widget>
          </item>
          <item>
           <widget class="QPushButton" name="selectDownloadPathButton">
            <property name="toolTip">
-            <string>Select where to save transfered files</string>
+            <string>Choose download folder</string>
            </property>
            <property name="text">
-            <string/>
-           </property>
-           <property name="icon">
-            <iconset theme="folder"/>
+            <string>Browse</string>
            </property>
           </widget>
          </item>

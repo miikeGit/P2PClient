@@ -35,6 +35,7 @@ private:
 	AppConfig m_appConfig;
 
 	void wireSignals();
+	void setConnectionStatus(bool online);
 	void clearFileInfo();
 };
 
