@@ -22,6 +22,20 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), m_appConfig(AppCo
 		return m_p2pClient ? m_p2pClient->getBufferedAmount() : 0;
 	});
 
+	wireSignals();
+
+	m_workerThread->start();
+	m_p2pClient->connectToBroker();
+}
+
+MainWindow::~MainWindow() {
+	if (m_workerThread) {
+		m_workerThread->quit();
+		m_workerThread->wait();
+	}
+}
+
+void MainWindow::wireSignals() {
 	connect(m_p2pClient, &P2PClient::binaryReceived, m_fileManager, &FileTransferManager::handleBinaryChunk);
 	connect(m_p2pClient, &P2PClient::jsonReceived, m_fileManager, &FileTransferManager::handleJsonCommand);
 	connect(m_p2pClient, &P2PClient::backpressureStateChanged, m_fileManager, &FileTransferManager::setBackpressure);
@@ -72,16 +86,6 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), m_appConfig(AppCo
 		qWarning() << "Transfer canceled";
 		clearFileInfo();
 	});
-
-	m_workerThread->start();
-	m_p2pClient->connectToBroker();
-}
-
-MainWindow::~MainWindow() {
-	if (m_workerThread) {
-		m_workerThread->quit();
-		m_workerThread->wait();
-	}
 }
 
 void MainWindow::on_callButton_clicked() {

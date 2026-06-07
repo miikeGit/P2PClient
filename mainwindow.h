@@ -34,6 +34,7 @@ private:
 	QString m_configPath = qApp->applicationDirPath() + "/config.json";
 	AppConfig m_appConfig;
 
+	void wireSignals();
 	void clearFileInfo();
 };
 

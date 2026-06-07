@@ -4,6 +4,10 @@
 
 using namespace rtc;
 
+namespace {
+constexpr size_t BINARY_LOW_WATER_MARK = 2 * 1024 * 1024;
+}
+
 P2PClient::P2PClient(const AppConfig& config, QObject *parent) : QObject(parent), m_config(config) {
 	m_myId = QUuid::createUuid().toString(QUuid::WithoutBraces);
 	qInfo() << "Local ID:" << m_myId;
@@ -186,7 +190,9 @@ void P2PClient::assignChannel(std::shared_ptr<rtc::DataChannel> channel) {
 void P2PClient::wireDataChannel(std::shared_ptr<rtc::DataChannel> channel) {
 	if (!channel) return;
 
-	if (channel->label() == "binary") {
+	const bool isBinary = (channel->label() == "binary");
+
+	if (isBinary) {
 		channel->onBufferedAmountLow([this]() {
 			QMetaObject::invokeMethod(this, [this]() {
 				emit backpressureStateChanged(false);
@@ -194,38 +200,37 @@ void P2PClient::wireDataChannel(std::shared_ptr<rtc::DataChannel> channel) {
 		});
 	}
 
-	channel->onOpen([this, channel]() {
-		QMetaObject::invokeMethod(this, [this, channel]() {
+	channel->onOpen([this, channel, isBinary]() {
+		QMetaObject::invokeMethod(this, [this, channel, isBinary]() {
 			qInfo() << "WebRTC DataChannel opened successfully:" << QString::fromStdString(channel->label());
-			if (channel->label() == "binary") {
-				channel->setBufferedAmountLowThreshold(2 * 1024 * 1024);
+			if (isBinary) {
+				channel->setBufferedAmountLowThreshold(BINARY_LOW_WATER_MARK);
 				m_binaryChannelOpen = true;
-			} else if (channel->label() == "control") {
+			} else {
 				m_controlChannelOpen = true;
 			}
 			checkConnectionReady();
 		});
 	});
 
-	channel->onClosed([this, channel]() {
+	channel->onClosed([channel]() {
 		qWarning() << "WebRTC DataChannel closed:" << QString::fromStdString(channel->label());
 	});
 
-	channel->onMessage([this, channel](std::variant<binary, std::string> message) {
-		if (auto* text = std::get_if<std::string>(&message)) {
-			if (channel->label() == "control") {
+	channel->onMessage([this, channel, isBinary](std::variant<binary, std::string> message) {
+		if (isBinary) {
+			if (auto* bin = std::get_if<binary>(&message)) {
+				QByteArray chunk(reinterpret_cast<const char *>(bin->data()), bin->size());
+				emit binaryReceived(chunk);
+			}
+		} else {
+			if (auto* text = std::get_if<std::string>(&message)) {
 				QString json = QString::fromStdString(*text);
 				qDebug() << "Received JSON command over Control Channel. Length:" << json.length();
 				QMetaObject::invokeMethod(this, [this, json]() {
 					auto doc = QJsonDocument::fromJson(json.toUtf8());
 					if (doc.isObject()) emit jsonReceived(doc.object());
 				});
-			}
-		} else {
-			if (channel->label() == "binary") {
-				auto& bin = std::get<binary>(message);
-				QByteArray chunk(reinterpret_cast<const char *>(bin.data()), bin.size());
-				emit binaryReceived(chunk);
 			}
 		}
 	});

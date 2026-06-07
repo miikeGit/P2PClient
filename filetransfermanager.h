@@ -37,6 +37,8 @@ public slots:
 	void setBackpressure(bool active);
 
 private:
+	enum class State { Idle, Sending, Receiving };
+
 	std::function<qint64()> m_networkBufferCb;
 	XXH3_state_t* m_hashState = nullptr;
 	QString m_downloadPath;
@@ -49,11 +51,12 @@ private:
 	qint64 m_receivedBytes = 0;
 	qint64 m_lastSpeedCheckBytes = 0;
 
-	bool m_isSending = false;
+	State m_state = State::Idle;
 
 	QString m_expectedHash;
 
 	void sendLoop();
+	void reportProgress(qint64 bytesTransferred);
 	void cleanup();
 	void updateSpeedStats(qint64 currentBytes);
 	void checkCompletion();
