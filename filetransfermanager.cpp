@@ -5,8 +5,7 @@
 #include <QCoreApplication>
 #include "xxhash.h"
 
-FileTransferManager::FileTransferManager(QObject *parent) : QObject(parent), m_fileSenderTimer(this), m_file(this) {
-	connect(&m_fileSenderTimer, &QTimer::timeout, this, &FileTransferManager::sendNextChunk);
+FileTransferManager::FileTransferManager(QObject *parent) : QObject(parent), m_file(this) {
 }
 
 FileTransferManager::~FileTransferManager() {
@@ -14,10 +13,8 @@ FileTransferManager::~FileTransferManager() {
 }
 
 void FileTransferManager::cleanup() {
-	m_fileSenderTimer.stop();
 	if (m_file.isOpen()) m_file.close();
 	m_isSending = false;
-	m_backpressure = false;
 	m_expectedHash.clear();
 
 	if (m_hashState) {
@@ -41,51 +38,50 @@ void FileTransferManager::sendFile(const QString &filePath) {
 	m_hashState = XXH3_createState();
 	XXH3_64bits_reset(m_hashState);
 
-	emit sendJsonCommand({
-		{"file_name", fileName},
-		{"file_size", m_expectedFileSize}
-	});
+	QJsonObject metadata;
+	metadata["file_name"] = fileName;
+	metadata["file_size"] = m_expectedFileSize;
+	emit sendJsonCommand(metadata);
+
 	emit transferStarted(fileName);
 	m_isSending = true;
 }
 
-void FileTransferManager::sendNextChunk() {
-	if (m_file.atEnd()) {
-		qint64 buffered = m_networkBufferCb ? m_networkBufferCb() : 0;
-		if (buffered > 0) return;
-
-		XXH64_hash_t hashResult = XXH3_64bits_digest(m_hashState);
-		QString finalHash = QString::number(hashResult, 16).rightJustified(16, '0');
-		qInfo() << "All chunks sent. Final hash:" << finalHash;
-
-		emit sendJsonCommand({{"action", "transfer_complete"},
-							  {"file_hash", finalHash}});
-
-		cleanup();
-		emit transferFinished();
-		return;
-	}
+void FileTransferManager::sendLoop() {
+	if (!m_isSending) return;
 
 	constexpr qint64 CHUNK_SIZE = 65536;
+	constexpr qint64 HIGH_WATER = 16 * 1024 * 1024;
 
-	qint64 buffered = m_networkBufferCb ? m_networkBufferCb() : 0;
-	if (buffered > 16 * 1024 * 1024) {
-		setBackpressure(true);
-		return;
+	while (!m_file.atEnd()) {
+		qint64 buffered = m_networkBufferCb ? m_networkBufferCb() : 0;
+		if (buffered > HIGH_WATER) {
+			return;
+		}
+
+		QByteArray chunk = m_file.read(CHUNK_SIZE);
+		XXH3_64bits_update(m_hashState, chunk.constData(), chunk.size());
+		emit sendBinaryData(chunk);
+
+		qint64 actualBytesSent = qMax((qint64)0, m_file.pos() - buffered);
+		if (m_progressTimer.elapsed() > 33) {
+			emit progressUpdated(actualBytesSent, m_expectedFileSize);
+			m_progressTimer.restart();
+		}
+		updateSpeedStats(actualBytesSent);
 	}
 
-	QByteArray chunk = m_file.read(CHUNK_SIZE);
-	XXH3_64bits_update(m_hashState, chunk.constData(), chunk.size());
-	emit sendBinaryData(chunk);
+	XXH64_hash_t hashResult = XXH3_64bits_digest(m_hashState);
+	QString finalHash = QString::number(hashResult, 16).rightJustified(16, '0');
+	qInfo() << "All chunks sent. Final hash:" << finalHash;
 
-	qint64 bytesSent = m_file.pos();
-	qint64 actualBytesSent = qMax((qint64)0, bytesSent - buffered);
+	QJsonObject completeMsg;
+	completeMsg["action"] = QStringLiteral("transfer_complete");
+	completeMsg["file_hash"] = finalHash;
+	emit sendJsonCommand(completeMsg);
 
-	if (m_progressTimer.elapsed() > 33) {
-		emit progressUpdated(actualBytesSent, m_expectedFileSize);
-		m_progressTimer.restart();
-	}
-	updateSpeedStats(actualBytesSent);
+	cleanup();
+	emit transferFinished();
 }
 
 void FileTransferManager::handleJsonCommand(const QJsonObject &json) {
@@ -133,10 +129,10 @@ void FileTransferManager::handleJsonCommand(const QJsonObject &json) {
 			m_transferSpeedTimer.start();
 			m_progressTimer.start();
 
-			emit sendJsonCommand({
-				{"action", "accept_transfer"},
-				{"resume_offset", existingSize}
-			});
+			QJsonObject acceptMsg;
+			acceptMsg["action"] = QStringLiteral("accept_transfer");
+			acceptMsg["resume_offset"] = existingSize;
+			emit sendJsonCommand(acceptMsg);
 		} else {
 			qCritical() << "Failed to create local file for downloading at:" << savePath;
 		}
@@ -157,7 +153,7 @@ void FileTransferManager::handleJsonCommand(const QJsonObject &json) {
 				}
 				m_transferSpeedTimer.start();
 				m_progressTimer.start();
-				m_fileSenderTimer.start();
+				sendLoop();
 			}
 		} else if (action == "cancel_transfer" || action == "receiver_canceled") {
 			cleanup();
@@ -202,14 +198,8 @@ void FileTransferManager::onPeerDisconnected() {
 }
 
 void FileTransferManager::setBackpressure(bool active) {
-	if (m_backpressure == active) return;
-	m_backpressure = active;
-	if (m_isSending) {
-		if (m_backpressure) {
-			m_fileSenderTimer.stop();
-		} else {
-			m_fileSenderTimer.start();
-		}
+	if (!active && m_isSending) {
+		sendLoop();
 	}
 }
 

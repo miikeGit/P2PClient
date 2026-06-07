@@ -25,12 +25,11 @@ public:
 	QString getMyId() const { return m_myId; }
 
 signals:
-	void brokerConnected();
 	void connectionEstablished();
 	void connectionClosed();
 	void jsonReceived(const QJsonObject& json);
 	void binaryReceived(const QByteArray& data);
-	void connectionStateChanged(int step, QString statusName, int maxSteps = 5);
+	void statusChanged(const QString& status);
 	void backpressureStateChanged(bool active);
 
 private slots:
@@ -52,6 +51,7 @@ private:
 
 	void setupMQTT();
 	void setupWebRTC();
+	void assignChannel(std::shared_ptr<rtc::DataChannel> channel);
 	void wireDataChannel(std::shared_ptr<rtc::DataChannel> channel);
 	void checkConnectionReady();
 	void sendSignalingMessage(const QJsonObject& message);

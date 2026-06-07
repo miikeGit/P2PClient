@@ -32,7 +32,6 @@ void P2PClient::connectToBroker() {
 void P2PClient::onMQTTConnected() {
 	qDebug() << "Connected to broker";
 	m_mqttClient->subscribe(m_myId, 1);
-	emit brokerConnected();
 }
 
 void P2PClient::onMQTTReceived(const QMQTT::Message &message) {
@@ -60,10 +59,10 @@ void P2PClient::sendSignalingMessage(const QJsonObject &message) {
 
 void P2PClient::setupWebRTC() {
 	qInfo() << "Initializing WebRTC PeerConnection...";
-	emit connectionStateChanged(2, "Initializing WebRTC PeerConnection...");
+	emit statusChanged("Initializing WebRTC PeerConnection...");
 	Configuration config;
 
-	emit connectionStateChanged(3, "Adding ICE servers");
+	emit statusChanged("Adding ICE servers");
 	for (const auto& server : m_config.iceServers) {
 		qDebug() << "Adding ICE server: " << server.urls;
 		IceServer iceServer(server.urls.toStdString());
@@ -101,7 +100,7 @@ void P2PClient::setupWebRTC() {
 				case PeerConnection::State::New:			stateStr = "New";			break;
 				case PeerConnection::State::Connecting:
 					stateStr = "Connecting";
-					emit connectionStateChanged(4, "Establishing P2P connection...");
+					emit statusChanged("Establishing P2P connection...");
 					break;
 				case PeerConnection::State::Connected:		stateStr = "Connected";		break;
 				case PeerConnection::State::Disconnected:	stateStr = "Disconnected";	break;
@@ -123,13 +122,7 @@ void P2PClient::setupWebRTC() {
 	m_peerConnection->onDataChannel([this](std::shared_ptr<DataChannel> dataChannel) {
 		qInfo() << "Remote peer created a DataChannel. Wiring it up...";
 		QMetaObject::invokeMethod(this, [this, dataChannel]() {
-			if (dataChannel->label() == "control") {
-				m_controlChannel = dataChannel;
-				wireDataChannel(m_controlChannel);
-			} else if (dataChannel->label() == "binary") {
-				m_binaryChannel = dataChannel;
-				wireDataChannel(m_binaryChannel);
-			}
+			assignChannel(dataChannel);
 		});
 	});
 }
@@ -139,7 +132,7 @@ void P2PClient::handleSignalingMessage(const QJsonObject &msg) {
 	qInfo() << "Got incoming message of type -" << type;
 
 	if (type == "offer") {
-		emit connectionStateChanged(3, "Incoming connection...");
+		emit statusChanged("Incoming connection...");
 
 		closeConnection();
 		m_targetId = msg["from"].toString();
@@ -176,9 +169,18 @@ void P2PClient::handleSignalingMessage(const QJsonObject &msg) {
 void P2PClient::checkConnectionReady() {
 	if (m_controlChannelOpen && m_binaryChannelOpen) {
 		qInfo() << "All DataChannels are open";
-		emit connectionStateChanged(5, "Connection established!");
+		emit statusChanged("Connection established!");
 		emit connectionEstablished();
 	}
+}
+
+void P2PClient::assignChannel(std::shared_ptr<rtc::DataChannel> channel) {
+	if (channel->label() == "control") {
+		m_controlChannel = channel;
+	} else if (channel->label() == "binary") {
+		m_binaryChannel = channel;
+	}
+	wireDataChannel(channel);
 }
 
 void P2PClient::wireDataChannel(std::shared_ptr<rtc::DataChannel> channel) {
@@ -236,14 +238,12 @@ void P2PClient::call(const QString &targetId) {
 	}
 
 	qInfo() << "Initiating call to target:" << targetId;
-	emit connectionStateChanged(1, "Connecting to target...");
+	emit statusChanged("Connecting to target...");
 	closeConnection();
 	m_targetId = targetId;
 	setupWebRTC();
-	m_controlChannel = m_peerConnection->createDataChannel("control");
-	m_binaryChannel = m_peerConnection->createDataChannel("binary");
-	wireDataChannel(m_controlChannel);
-	wireDataChannel(m_binaryChannel);
+	assignChannel(m_peerConnection->createDataChannel("control"));
+	assignChannel(m_peerConnection->createDataChannel("binary"));
 	m_peerConnection->setLocalDescription();
 }
 
@@ -261,9 +261,6 @@ void P2PClient::sendBinary(const QByteArray& data) {
 		rtc::binary binChunk(reinterpret_cast<const std::byte*>(data.constData()),
 												 reinterpret_cast<const std::byte*>(data.constData()) + data.size());
 		m_binaryChannel->send(binChunk);
-		if (m_binaryChannel->bufferedAmount() > 16 * 1024 * 1024) {
-			emit backpressureStateChanged(true);
-		}
 	}
 }
 

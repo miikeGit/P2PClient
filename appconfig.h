@@ -7,8 +7,6 @@
 struct MqttConfig {
 		QString host;
 		quint16 port;
-		QString username;
-		QString password;
 };
 
 struct IceServerConfig {

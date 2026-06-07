@@ -41,8 +41,8 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), m_appConfig(AppCo
 		QMessageBox::warning(this, "Warning!", "Peer disconnected!");
 	});
 
-	connect(m_p2pClient, &P2PClient::connectionStateChanged, this, [this](int step, QString status, int maxSteps) {
-		ui->statusbar->showMessage(QString("Connection Step %1/%2: %3").arg(step).arg(maxSteps).arg(status), 5000);
+	connect(m_p2pClient, &P2PClient::statusChanged, this, [this](const QString& status) {
+		ui->statusbar->showMessage(status, 5000);
 	});
 
 	connect(m_fileManager, &FileTransferManager::transferStarted, this, [this](const QString& name) {

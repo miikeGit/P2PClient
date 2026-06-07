@@ -5,7 +5,6 @@
 #include <QJsonObject>
 #include <QObject>
 #include <QString>
-#include <QTimer>
 #include <QElapsedTimer>
 #include <QFile>
 #include <functional>
@@ -37,16 +36,12 @@ public slots:
 	void onPeerDisconnected();
 	void setBackpressure(bool active);
 
-private slots:
-	void sendNextChunk();
-
 private:
 	std::function<qint64()> m_networkBufferCb;
 	XXH3_state_t* m_hashState = nullptr;
 	QString m_downloadPath;
 
 	QFile m_file;
-	QTimer m_fileSenderTimer;
 	QElapsedTimer m_transferSpeedTimer;
 	QElapsedTimer m_progressTimer;
 
@@ -55,10 +50,10 @@ private:
 	qint64 m_lastSpeedCheckBytes = 0;
 
 	bool m_isSending = false;
-	bool m_backpressure = false;
 
 	QString m_expectedHash;
 
+	void sendLoop();
 	void cleanup();
 	void updateSpeedStats(qint64 currentBytes);
 	void checkCompletion();
