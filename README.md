@@ -4,6 +4,10 @@ Desktop app for sending files directly between two machines over WebRTC. An MQTT
 
 Built with Qt Widgets and C++20.
 
+<p align="center">
+<img width="609" height="814" alt="image" src="https://github.com/user-attachments/assets/60c20e8e-6661-4d72-8d19-712bc58c9db4" />
+</p>
+
 ## How it works
 
 Each instance generates a random ID on startup and connects to an MQTT broker. To start a transfer:
