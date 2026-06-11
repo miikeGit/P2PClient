@@ -1,0 +1,109 @@
+name: CMake on multiple platforms
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+jobs:
+  build:
+    runs-on: ${{ matrix.os }}
+
+    strategy:
+      fail-fast: false
+
+      matrix:
+        os: [ubuntu-latest, windows-2022, macos-latest]
+        build_type: [Release]
+        c_compiler: [gcc, cl, clang]
+        include:
+          - os: windows-2022
+            c_compiler: cl
+            cpp_compiler: cl
+          - os: ubuntu-latest
+            c_compiler: gcc
+            cpp_compiler: g++
+          - os: macos-latest
+            c_compiler: clang
+            cpp_compiler: clang++
+        exclude:
+          - os: windows-2022
+            c_compiler: gcc
+          - os: windows-2022
+            c_compiler: clang
+          - os: ubuntu-latest
+            c_compiler: cl
+          - os: ubuntu-latest
+            c_compiler: clang
+          - os: macos-latest
+            c_compiler: gcc
+          - os: macos-latest
+            c_compiler: cl
+
+    steps:
+    - name: Checkout Repository
+      uses: actions/checkout@v4
+      with:
+        submodules: recursive
+
+    - name: Install Linux Build Dependencies
+      if: matrix.os == 'ubuntu-latest'
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y \
+          build-essential \
+          libgl1-mesa-dev \
+          libglu1-mesa-dev \
+          libxkbcommon-dev \
+          libssl-dev \
+          pkg-config
+
+    - name: Install macOS Build Dependencies
+      if: matrix.os == 'macos-latest'
+      run: |
+        brew install openssl@3
+
+    - name: Install Qt 6
+      uses: jurplel/install-qt-action@v3
+      with:
+        version: '6.5.3'
+        host: ${{ matrix.os == 'windows-2022' && 'windows' || matrix.os == 'macos-latest' && 'mac' || 'linux' }}
+        target: 'desktop'
+        arch: ${{ matrix.os == 'windows-2022' && 'win64_msvc2019_64' || matrix.os == 'macos-latest' && 'clang_64' || 'gcc_64' }}
+        cache: true
+
+    - name: Set reusable strings
+      id: strings
+      shell: bash
+      run: |
+        echo "build-output-dir=${{ github.workspace }}/build" >> "$GITHUB_OUTPUT"
+        
+    - name: Configure CMake
+      env:
+        Qt6_DIR: ${{ env.Qt6_DIR }}
+      shell: bash
+      run: |
+        cmake -B "${{ steps.strings.outputs.build-output-dir }}" \
+        -DCMAKE_CXX_COMPILER=${{ matrix.cpp_compiler }} \
+        -DCMAKE_C_COMPILER=${{ matrix.c_compiler }} \
+        -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} \
+        -DCMAKE_PREFIX_PATH="${{ env.Qt6_DIR }}" \
+        -DOPENSSL_ROOT_DIR="${{ matrix.os == 'macos-latest' && '/opt/homebrew/opt/openssl@3' || '' }}" \
+        -DCMAKE_POSITION_INDEPENDENT_CODE=ON \
+        -DCMAKE_POLICY_DEFAULT_CMP0079=NEW \
+        -DCMAKE_POLICY_VERSION_MINIMUM=3.5 \
+        -DBUILD_SHARED_LIBS=OFF \
+        -DNO_WEBRTC=OFF \
+        -DNO_SUBMODULES=OFF \
+        -DUSE_GNUTLS=OFF \
+        -DUSE_MBEDTLS="${{ matrix.os == 'macos-latest' && 'OFF' || 'ON' }}" \
+        -DMSVC_RUNTIME_DYNAMIC=ON \
+        -S "${{ github.workspace }}"
+
+    - name: Build
+      run: cmake --build ${{ steps.strings.outputs.build-output-dir }} --config ${{ matrix.build_type }}
+
+    - name: Test
+      working-directory: ${{ steps.strings.outputs.build-output-dir }}
+      run: ctest --build-config ${{ matrix.build_type }} --output-on-failure

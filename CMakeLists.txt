@@ -10,6 +10,9 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 if(WIN32)
     set(PLATFORM_LIBS ws2_32 iphlpapi dwmapi)
 endif()
+if(MSVC)
+    add_compile_definitions(_SILENCE_STDEXT_ARR_ITERS_DEPRECATION_WARNING)
+endif()
 
 find_package(Qt6 QUIET COMPONENTS Widgets Network)
 if(NOT Qt6_FOUND)
@@ -71,6 +74,8 @@ FetchContent_MakeAvailable(qmqtt datachannel)
 
 if(MSVC)
     target_link_libraries(datachannel PRIVATE mbedtls mbedx509 mbedcrypto)
+elseif(APPLE)
+    target_link_libraries(datachannel PRIVATE mbedtls mbedx509 mbedcrypto)
 else()
     target_link_libraries(datachannel PRIVATE -Wl,--start-group mbedtls mbedx509 mbedcrypto -Wl,--end-group)
 endif()
@@ -111,3 +116,26 @@ add_custom_command(TARGET P2PClient POST_BUILD
     "${CMAKE_CURRENT_SOURCE_DIR}/config.json"
     "$<TARGET_FILE_DIR:P2PClient>/config.json"
 )
+
+if(WIN32)
+    find_program(WINDEPLOYQT windeployqt HINTS "${Qt6_DIR}/../../../bin" "${Qt5_DIR}/../../../bin")
+    if(WINDEPLOYQT)
+        add_custom_command(TARGET P2PClient POST_BUILD
+            COMMAND ${WINDEPLOYQT}
+                --no-translations
+                --no-system-d3d-compiler
+                --no-opengl-sw
+                "$<TARGET_FILE:P2PClient>"
+            COMMENT "Running windeployqt..."
+        )
+    endif()
+    add_custom_command(TARGET P2PClient POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+            "$<TARGET_FILE:datachannel>"
+            "$<TARGET_FILE_DIR:P2PClient>"
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+            "$<TARGET_FILE:qmqtt>"
+            "$<TARGET_FILE_DIR:P2PClient>"
+        COMMENT "Copying runtime DLLs..."
+    )
+endif()

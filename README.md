@@ -22,12 +22,12 @@ Only one transfer runs at a time. The transfer logic lives on its own worker thr
 
 ## Building
 
-Needs Qt 6 (falls back to Qt 5), CMake 3.16+, and a C++20 compiler (MSVC on Windows).
+Needs Qt 6 (falls back to Qt 5), CMake 3.16+, and a C++20 compiler.
 
 mbedTLS, qmqtt, and libdatachannel are fetched automatically by CMake, so there's no manual dependency setup — the first configure will take a while.
 
 ```
-cmake -B build
+cmake -B build -DCMAKE_POLICY_VERSION_MINIMUM=3.5
 cmake --build build --config Debug
 ```
 
